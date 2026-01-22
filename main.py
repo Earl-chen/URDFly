@@ -38,6 +38,7 @@ from PyQt5.QtWidgets import (
 from xml_editor import XMLEditor
 from mdh_dialog import MDHDialog
 from decomp_dialog import DecompDialog
+from translations import TranslationManager, tr as _
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -123,22 +124,25 @@ class URDFViewer(QMainWindow):
         self.revolute_joints = []  # List to store revolute joints
         self.joint_value_labels = []  # List to store joint value labels
         self.display_in_degrees = False  # False: rad, True: deg
+
+        # === 新增：翻译管理 ===
+        self.translation_manager = TranslationManager()
         self.init_ui()
         
 
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle("URDFly")
-        
+        self.setWindowTitle(self.translation_manager.tr("window_title"))
+
         # Set window size
         window_width = 1200
         window_height = 800
-        
+
         # Get screen size and calculate center position
         screen = QDesktopWidget().availableGeometry()
         x = (screen.width() - window_width) // 2
         y = (screen.height() - window_height) // 2
-        
+
         # Set window geometry to be centered on screen
         self.setGeometry(x, y, window_width, window_height)
 
@@ -149,46 +153,61 @@ class URDFViewer(QMainWindow):
         # Create left panel for controls
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
-        
+
         # Create right panel for joint controls
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
 
+        # === 新增：语言切换控件 ===
+        lang_layout = QHBoxLayout()
+        lang_label = QLabel(self.translation_manager.tr("language"))
+        self.language_combo = QComboBox()
+        self.language_combo.addItem(self.translation_manager.tr("lang_zh"), "zh_CN")
+        self.language_combo.addItem(self.translation_manager.tr("lang_en"), "en")
+        self.language_combo.setCurrentIndex(0 if self.translation_manager.current_language == "zh_CN" else 1)
+        self.language_combo.currentIndexChanged.connect(self.change_language)
+        lang_layout.addWidget(lang_label)
+        lang_layout.addWidget(self.language_combo)
+        lang_layout.addStretch()
+        left_layout.addLayout(lang_layout)
+
         # Create chain selection combo box
         chain_selection_layout = QVBoxLayout()
-        chain_selection_layout.addWidget(QLabel("选择运动链："))
+        chain_selection_layout.addWidget(QLabel(self.translation_manager.tr("select_chain")))
         self.chain_combo = QComboBox()
         self.chain_combo.currentIndexChanged.connect(self.on_chain_selected)
         chain_selection_layout.addWidget(self.chain_combo)
 
         # Create link list widget
-        chain_selection_layout.addWidget(QLabel("连杆："))
+        chain_selection_layout.addWidget(QLabel(self.translation_manager.tr("links")))
         self.link_list = QListWidget()
         self.link_list.setSelectionMode(QListWidget.SingleSelection)
         self.link_list.itemSelectionChanged.connect(self.on_link_selection_changed)
         chain_selection_layout.addWidget(self.link_list)
-        
+
         # Create a widget to hold the chain selection layout
         chain_selection_widget = QWidget()
         chain_selection_widget.setLayout(chain_selection_layout)
 
         # Create button for opening URDF file
-        btn_open = QPushButton("打开 URDF")
+        btn_open = QPushButton(self.translation_manager.tr("open_urdf"))
+        self.btn_open = btn_open  # 保存引用以便后续翻译
         btn_open.clicked.connect(self.open_urdf_file)
 
         # Create Edit button
-        btn_edit = QPushButton("编辑 URDF")
+        btn_edit = QPushButton(self.translation_manager.tr("edit_urdf"))
+        self.btn_edit = btn_edit  # 保存引用
         btn_edit.clicked.connect(self.edit_urdf_file)
-        btn_edit.setToolTip("在 XML 编辑器中打开当前 URDF 文件")
+        btn_edit.setToolTip(self.translation_manager.tr("edit_urdf_tooltip"))
 
         # Create MDH button
-        btn_mdh = QPushButton("显示 MDH 参数")
+        btn_mdh = QPushButton(self.translation_manager.tr("show_mdh"))
         btn_mdh.clicked.connect(self.show_mdh_parameters)
 
-        btn_decomp = QPushButton("凸分解碰撞体")
+        btn_decomp = QPushButton(self.translation_manager.tr("decompose_collision"))
         btn_decomp.clicked.connect(self.decompose_collision_meshes)
 
-        btn_set_joints = QPushButton("设置关节")
+        btn_set_joints = QPushButton(self.translation_manager.tr("set_joints"))
         btn_set_joints.clicked.connect(self.open_set_joints_dialog)
 
         # Create transparency controls
@@ -196,7 +215,8 @@ class URDFViewer(QMainWindow):
         transparency_layout = QVBoxLayout()
 
         # Transparency slider
-        transparency_layout.addWidget(QLabel("透明度："))
+        transparency_label = QLabel(self.translation_manager.tr("transparency"))
+        transparency_layout.addWidget(transparency_label)
         self.transparency_slider = QSlider(Qt.Horizontal)
         self.transparency_slider.setMinimum(0)
         self.transparency_slider.setMaximum(100)
@@ -205,61 +225,42 @@ class URDFViewer(QMainWindow):
         self.transparency_slider.setTickInterval(10)
         self.transparency_slider.valueChanged.connect(self.apply_transparency)
         transparency_layout.addWidget(self.transparency_slider)
+        self.transparency_label = transparency_label  # 保存引用
 
         transparency_group.setLayout(transparency_layout)
 
         # Create checkboxes for frame visibility
-        visibility_group = QGroupBox("显示设置")
+        visibility_group = QGroupBox(self.translation_manager.tr("visibility_settings"))
         visibility_layout = QVBoxLayout()
 
         # === 新增：视觉显示控制 ===
-        self.cb_visual = QCheckBox("显示视觉")
+        self.cb_visual = QCheckBox(self.translation_manager.tr("show_visual"))
         self.cb_visual.setChecked(True)
         self.cb_visual.stateChanged.connect(self.toggle_visual)
 
         # === 新增：关节轴显示控制 ===
-        self.cb_joint_axes = QCheckBox("显示关节轴")
+        self.cb_joint_axes = QCheckBox(self.translation_manager.tr("show_joint_axes"))
         self.cb_joint_axes.setChecked(False)
         self.cb_joint_axes.stateChanged.connect(self.toggle_joint_axes)
 
         # === 新增：碰撞体显示控制 ===
-        self.cb_collision = QCheckBox("显示碰撞体")
+        self.cb_collision = QCheckBox(self.translation_manager.tr("show_collision"))
         self.cb_collision.setChecked(True)
         self.cb_collision.stateChanged.connect(self.toggle_collision)
 
         # === 新增：质心显示控制 ===
-        self.cb_com = QCheckBox("显示质心 (COM)")
+        self.cb_com = QCheckBox(self.translation_manager.tr("show_com"))
         self.cb_com.setChecked(False)
         self.cb_com.stateChanged.connect(self.toggle_com)
 
         # === 新增：惯量显示控制 ===
-        self.cb_inertia = QCheckBox("显示惯量")
+        self.cb_inertia = QCheckBox(self.translation_manager.tr("show_inertia"))
         self.cb_inertia.setChecked(False)
         self.cb_inertia.stateChanged.connect(self.toggle_inertia)
 
-        self.cb_link_frames = QCheckBox("显示连杆坐标系")
+        self.cb_link_frames = QCheckBox(self.translation_manager.tr("show_link_frames"))
         self.cb_link_frames.setChecked(True)
         self.cb_link_frames.stateChanged.connect(self.toggle_link_frames)
-
-        self.cb_mdh_frames = QCheckBox("显示 MDH 坐标系")
-        self.cb_mdh_frames.setChecked(False)
-        self.cb_mdh_frames.stateChanged.connect(self.toggle_mdh_frames)
-
-        self.cb_joint_axes = QCheckBox("显示关节轴")
-        self.cb_joint_axes.setChecked(False)
-        self.cb_joint_axes.stateChanged.connect(self.toggle_joint_axes)
-
-        self.cb_collision = QCheckBox("显示碰撞体")
-        self.cb_collision.setChecked(True)
-        self.cb_collision.stateChanged.connect(self.toggle_collision)
-
-        self.cb_com = QCheckBox("显示质心 (COM)")
-        self.cb_com.setChecked(False)
-        self.cb_com.stateChanged.connect(self.toggle_com)
-
-        self.cb_inertia = QCheckBox("显示惯量")
-        self.cb_inertia.setChecked(False)
-        self.cb_inertia.stateChanged.connect(self.toggle_inertia)
 
         visibility_layout.addWidget(self.cb_visual)
         visibility_layout.addWidget(self.cb_link_frames)
@@ -271,21 +272,27 @@ class URDFViewer(QMainWindow):
 
         visibility_group.setLayout(visibility_layout)
 
+        # === 保存控件引用以便翻译 ===
+        self.btn_mdh = btn_mdh
+        self.btn_decomp = btn_decomp
+        self.btn_set_joints = btn_set_joints
+        self.visibility_group = visibility_group
+
         # Add widgets to left panel
-        left_layout.addWidget(QLabel("机器人结构："))
+        left_layout.addWidget(QLabel(self.translation_manager.tr("robot_structure")))
         left_layout.addWidget(chain_selection_widget)
         left_layout.addWidget(btn_open)
         left_layout.addWidget(btn_edit)
         left_layout.addWidget(btn_mdh)
         left_layout.addWidget(btn_decomp)
         left_layout.addWidget(btn_set_joints)
-        
+
         left_layout.addWidget(transparency_group)
         left_layout.addWidget(visibility_group)
         left_layout.addStretch()
-        
+
         # Add current file label at the bottom of left panel
-        self.current_file_label = QLabel("当前文件：无")
+        self.current_file_label = QLabel(self.translation_manager.tr("current_file") + " " + self.translation_manager.tr("current_file_none"))
         self.current_file_label.setWordWrap(True)
         self.current_file_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
         left_layout.addWidget(self.current_file_label)
@@ -307,26 +314,26 @@ class URDFViewer(QMainWindow):
         self.joint_layout = QVBoxLayout(self.joint_container)
         
         # Add a label explaining the sliders
-        joint_label = QLabel("调整关节角度：")
-        self.joint_layout.addWidget(joint_label)
-        
+        self.joint_label = QLabel(self.translation_manager.tr("joint_control"))
+        self.joint_layout.addWidget(self.joint_label)
+
         # We'll add sliders dynamically when a URDF is loaded
-        
+
         # Set the container as the scroll area's widget
         joint_scroll_area.setWidget(self.joint_container)
-        
+
         # Create a group box to contain the scroll area
-        joint_group = QGroupBox("关节控制")
-        joint_group_layout = QVBoxLayout(joint_group)
+        self.joint_group = QGroupBox(self.translation_manager.tr("joint_group"))
+        joint_group_layout = QVBoxLayout(self.joint_group)
 
         # Add reset and random buttons
         buttons_layout = QHBoxLayout()
-        btn_reset = QPushButton("重置")
-        btn_reset.clicked.connect(self.reset_joints)
-        btn_random = QPushButton("随机")
-        btn_random.clicked.connect(self.randomize_joints)
-        buttons_layout.addWidget(btn_reset)
-        buttons_layout.addWidget(btn_random)
+        self.btn_reset = QPushButton("重置")
+        self.btn_reset.clicked.connect(self.reset_joints)
+        self.btn_random = QPushButton("随机")
+        self.btn_random.clicked.connect(self.randomize_joints)
+        buttons_layout.addWidget(self.btn_reset)
+        buttons_layout.addWidget(self.btn_random)
         # Units toggle next to Reset/Random
         self.units_combo = QComboBox()
         self.units_combo.addItems(["rad", "deg"])
@@ -497,16 +504,17 @@ class URDFViewer(QMainWindow):
                 self.update_current_file_label()
 
             except Exception as e:
+                msg = self.translation_manager.tr("load_urdf_failed")
                 QMessageBox.critical(
-                    self, "错误", f"加载 URDF 文件失败: {str(e)}"
+                    self, self.translation_manager.tr("error"), msg.replace("{}", str(e))
                 )
-    
+
     def open_urdf_file(self):
         """Open a URDF file dialog and load the selected file"""
         filename, _ = QFileDialog.getOpenFileName(
-            self, "打开 URDF 文件", "", "URDF 文件 (*.urdf)"
+            self, self.translation_manager.tr("dialog_open_urdf"), "", self.translation_manager.tr("dialog_urdf_filter")
         )
-        
+
         if filename:
             self.load_urdf_file(filename)
 
@@ -542,8 +550,10 @@ class URDFViewer(QMainWindow):
                     model.text_actor.SetVisibility(self.cb_link_frames.isChecked())
 
         except Exception as e:
+            msg = self.translation_manager.tr("load_model_failed_pattern")
             QMessageBox.warning(
-                self, "警告", f"加载模型 {name} 失败: {str(e)}"
+                self, self.translation_manager.tr("warning"),
+                msg.replace(" {}", f" {name}").replace("{}", str(e))
             )
 
     # === 新增：创建基本几何形状碰撞体 ===
@@ -717,7 +727,8 @@ class URDFViewer(QMainWindow):
 
         # Add each chain to the combo box
         for i, chain in enumerate(self.chains):
-            self.chain_combo.addItem(f"运动链 {i+1}: {chain['name']}", i)
+            chain_label = self.translation_manager.tr("chain_pattern")
+            self.chain_combo.addItem(chain_label.format(i+1, chain['name']), i)
         
         # Select the first chain by default if available
         if self.chains:
@@ -817,12 +828,13 @@ class URDFViewer(QMainWindow):
     def toggle_mdh_frames(self, state):
         """Toggle visibility of MDH frames"""
         visible = state == Qt.Checked
-        
+
         # If we want to show MDH frames
         if visible:
             if not self.current_urdf_file:
                 QMessageBox.warning(
-                    self, "警告", "请先加载 URDF 文件。[MDH]"
+                    self, self.translation_manager.tr("warning"),
+                    self.translation_manager.tr("load_urdf_mdh")
                 )
                 self.cb_mdh_frames.setChecked(False)
                 return
@@ -832,7 +844,8 @@ class URDFViewer(QMainWindow):
                 self.create_mdh_frames(self.selected_chain)
             else:
                 QMessageBox.warning(
-                    self, "警告", "请先选择一个运动链。"
+                    self, self.translation_manager.tr("warning"),
+                    self.translation_manager.tr("select_chain_warning")
                 )
                 self.cb_mdh_frames.setChecked(False)
                 return
@@ -938,7 +951,8 @@ class URDFViewer(QMainWindow):
         if visible:
             if not self.current_urdf_file:
                 QMessageBox.warning(
-                    self, "警告", "请先加载 URDF 文件。[关节轴]"
+                    self, self.translation_manager.tr("warning"),
+                    self.translation_manager.tr("load_urdf_joint_axes")
                 )
                 self.cb_joint_axes.setChecked(False)
                 return
@@ -962,7 +976,8 @@ class URDFViewer(QMainWindow):
         if visible:
             if not self.current_urdf_file:
                 QMessageBox.warning(
-                    self, "警告", "请先加载 URDF 文件。[质心]"
+                    self, self.translation_manager.tr("warning"),
+                    self.translation_manager.tr("load_urdf_com")
                 )
                 self.cb_com.setChecked(False)
                 return
@@ -986,7 +1001,8 @@ class URDFViewer(QMainWindow):
         if visible:
             if not self.current_urdf_file:
                 QMessageBox.warning(
-                    self, "警告", "请先加载 URDF 文件。[惯量]"
+                    self, self.translation_manager.tr("warning"),
+                    self.translation_manager.tr("load_urdf_inertia")
                 )
                 self.cb_inertia.setChecked(False)
                 return
@@ -1006,36 +1022,38 @@ class URDFViewer(QMainWindow):
         """Show MDH parameters in a dialog"""
         if not self.selected_chain:
             QMessageBox.warning(
-                self, "警告", "请先选择一个运动链以查看 MDH 参数。"
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("select_chain_mdh_warning")
             )
             return
 
         if not self.current_urdf_file:
             QMessageBox.warning(
-                self, "警告", "请先加载 URDF 文件。[显示 MDH]"
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("load_urdf_show_mdh")
             )
             return
-        
+
         # Create a fresh parser instance to ensure we get the latest MDH parameters
         parser = URDFParser(self.current_urdf_file)
-        
+
         # Get chain information to ensure we have the latest chain data
         chains, _ = parser.get_chain_info()
-        
+
         # Find the matching chain in the updated chains list
         current_chain = None
         for chain in chains:
             if chain['name'] == self.selected_chain['name']:
                 current_chain = chain
                 break
-        
+
         # If we couldn't find a matching chain, use the selected chain
         if current_chain is None:
             current_chain = self.selected_chain
-        
+
         # Get MDH parameters using the current chain
         _, _, _, mdh_parameters = parser.get_mdh_parameters(current_chain)
-        
+
         # Create and show the new MDH dialog
         dialog = MDHDialog(self, current_chain['name'], mdh_parameters)
         dialog.exec_()
@@ -1043,14 +1061,15 @@ class URDFViewer(QMainWindow):
     def open_set_joints_dialog(self):
         """Open a dialog to input joint angles and apply them to the robot and sliders."""
         if not self.revolute_joints:
-            QMessageBox.warning(self, "警告", "没有可用的旋转关节。请先加载 URDF 文件。")
+            QMessageBox.warning(self, self.translation_manager.tr("warning"),
+                               self.translation_manager.tr("no_revolute_joints"))
             return
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("设置关节")
+        dialog.setWindowTitle(self.translation_manager.tr("set_joints_title"))
         vbox = QVBoxLayout(dialog)
 
-        vbox.addWidget(QLabel("输入关节角度（用逗号或空格分隔）："))
+        vbox.addWidget(QLabel(self.translation_manager.tr("input_joints_prompt")))
         angles_edit = QLineEdit()
         # Pre-fill with current values in currently selected unit for convenience
         try:
@@ -1064,9 +1083,9 @@ class URDFViewer(QMainWindow):
         except Exception:
             pass
         vbox.addWidget(angles_edit)
-        
+
         units_row = QHBoxLayout()
-        units_row.addWidget(QLabel("单位："))
+        units_row.addWidget(QLabel(self.translation_manager.tr("units_label")))
         units_combo = QComboBox()
         units_combo.addItems(["rad", "deg"])
         units_combo.setCurrentText("deg" if self.display_in_degrees else "rad")
@@ -1075,28 +1094,32 @@ class URDFViewer(QMainWindow):
         vbox.addLayout(units_row)
 
         buttons_row = QHBoxLayout()
-        btn_apply = QPushButton("应用")
-        btn_cancel = QPushButton("取消")
+        btn_apply = QPushButton(self.translation_manager.tr("btn_apply"))
+        btn_cancel = QPushButton(self.translation_manager.tr("btn_cancel"))
         buttons_row.addStretch(1)
         buttons_row.addWidget(btn_cancel)
         buttons_row.addWidget(btn_apply)
         vbox.addLayout(buttons_row)
-        
+
         def parse_and_apply():
             raw = angles_edit.text().strip()
             if not raw:
-                QMessageBox.warning(dialog, "警告", "请输入角度值。")
+                QMessageBox.warning(dialog, self.translation_manager.tr("warning"),
+                                   self.translation_manager.tr("input_angles_warning"))
                 return
             # Support comma or whitespace separated values
             tokens = raw.replace(",", " ").split()
             try:
                 vals = [float(t) for t in tokens]
             except ValueError:
-                QMessageBox.critical(dialog, "错误", "输入列表中包含无效数字。")
+                QMessageBox.critical(dialog, self.translation_manager.tr("error"),
+                                    self.translation_manager.tr("input_numbers_error"))
                 return
             n = len(self.revolute_joints)
             if len(vals) != n:
-                QMessageBox.warning(dialog, "警告", f"需要 {n} 个值，收到 {len(vals)} 个。")
+                msg = self.translation_manager.tr("input_count_warning")
+                QMessageBox.warning(dialog, self.translation_manager.tr("warning"),
+                                   msg.format(n, len(vals)))
                 return
             # Convert to radians if needed
             if units_combo.currentText() == "deg":
@@ -1154,7 +1177,8 @@ class URDFViewer(QMainWindow):
             joint_box_layout = QVBoxLayout(joint_box)
 
             # 添加范围标签
-            range_label = QLabel(f"范围: {self.format_angle(lower)} ~ {self.format_angle(upper)}")
+            range_text = self.translation_manager.tr("range_label")
+            range_label = QLabel(range_text.format(self.format_angle(lower), self.format_angle(upper)))
             range_label.setStyleSheet("color: gray; font-size: 10px;")
             joint_box_layout.addWidget(range_label)
 
@@ -1247,6 +1271,11 @@ class URDFViewer(QMainWindow):
         """Handle units toggle between radians and degrees for display."""
         self.display_in_degrees = (text == "deg")
         self.update_all_joint_value_labels()
+
+    def change_language(self, index):
+        """Handle language combo box change"""
+        lang_code = self.language_combo.itemData(index)
+        self.translation_manager.set_language(lang_code, self)
 
     def format_angle(self, angle_radians):
         """Format angle for display according to current unit setting."""
@@ -1458,7 +1487,8 @@ class URDFViewer(QMainWindow):
         """Open the current URDF file in the XML editor"""
         if not self.current_urdf_file:
             QMessageBox.warning(
-                self, "警告", "请先加载 URDF 文件。[编辑]"
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("load_urdf_edit")
             )
             return
         
@@ -1563,8 +1593,10 @@ class URDFViewer(QMainWindow):
             self.update_current_file_label()
             
         except Exception as e:
+            msg = self.translation_manager.tr("update_model_failed")
             QMessageBox.critical(
-                self, "错误", f"从 XML 更新模型失败: {str(e)}"
+                self, self.translation_manager.tr("error"),
+                msg.replace("{}", str(e))
             )
 
     def update_current_file_label(self):
@@ -1572,15 +1604,16 @@ class URDFViewer(QMainWindow):
         if self.current_urdf_file:
             # Extract just the filename from the path for cleaner display
             filename = os.path.basename(self.current_urdf_file)
-            self.current_file_label.setText(f"当前文件：{filename}")
+            self.current_file_label.setText(self.translation_manager.tr("current_file") + f" {filename}")
         else:
-            self.current_file_label.setText("当前文件：无")
-            
+            self.current_file_label.setText(self.translation_manager.tr("current_file") + " " + self.translation_manager.tr("current_file_none"))
+
     def decompose_collision_meshes(self):
         """Handle decomposition of collision meshes"""
         if not self.collision_mesh_files:
             QMessageBox.warning(
-                self, "警告", "没有可用的碰撞网格。请先加载 URDF 文件。"
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("no_collision_meshes")
             )
             return
         
