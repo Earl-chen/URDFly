@@ -1245,15 +1245,15 @@ class URDFViewer(QMainWindow):
         """Clear all joint sliders"""
         # Clear the joint values
         self.joint_values = []
-        
+
         # Clear the sliders list
         self.joint_sliders = []
         self.joint_value_labels = []
-        
-        # Remove all widgets from the joint layout
+
+        # Remove all widgets from the joint layout except the label
         if hasattr(self, 'joint_layout'):
-            while self.joint_layout.count():
-                item = self.joint_layout.takeAt(0)
+            while self.joint_layout.count() > 1:  # Keep the first item (joint_label)
+                item = self.joint_layout.takeAt(1)  # Start from index 1
                 widget = item.widget()
                 if widget:
                     widget.deleteLater()
