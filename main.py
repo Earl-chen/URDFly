@@ -1537,7 +1537,8 @@ class URDFViewer(QMainWindow):
             joint_limits,
             collision_mesh_files,
             collision_mesh_transformations,
-            collision_link_names,) = parser.get_robot_info()
+            collision_link_names,
+            collision_geometries,) = parser.get_robot_info()
 
             # Store revolute joints for slider controls
             self.revolute_joints = []
@@ -1737,7 +1738,7 @@ class URDFViewer(QMainWindow):
             return
 
         parser = URDFParser(self.current_urdf_file)
-        link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
+        link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
 
         for link_name, link_frame in zip(link_names, link_frames):
             # Get inertial data from parser
@@ -1808,7 +1809,7 @@ class URDFViewer(QMainWindow):
             return
 
         parser = URDFParser(self.current_urdf_file)
-        link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
+        link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
 
         for link_name, link_frame in zip(link_names, link_frames):
             # Get inertial data from parser
