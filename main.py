@@ -84,6 +84,13 @@ class DragDropVTKWidget(QVTKRenderWindowInteractor):
         event.ignore()
 
 
+def _update_transform_for_actor(actor, transform_matrix):
+    """Helper function to update actor transform (module-level for lambda use)"""
+    vtk_transform = vtk.vtkTransform()
+    vtk_transform.SetMatrix(transform_matrix.flatten())
+    actor.SetUserTransform(vtk_transform)
+
+
 class URDFViewer(QMainWindow):
     """Main application window for URDF viewer"""
 
@@ -588,7 +595,7 @@ class URDFViewer(QMainWindow):
             actor.SetUserTransform(vtk_transform)
 
             self.renderer.AddActor(actor)
-            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda t: self._update_actor_transform(actor, t), 'axes_actor': None, 'text_actor': None})())
+            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t), 'axes_actor': None, 'text_actor': None})())
 
         except Exception as e:
             print(f"Error creating collision box {name}: {e}")
@@ -617,7 +624,7 @@ class URDFViewer(QMainWindow):
             actor.SetUserTransform(vtk_transform)
 
             self.renderer.AddActor(actor)
-            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda t: self._update_actor_transform(actor, t), 'axes_actor': None, 'text_actor': None})())
+            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t), 'axes_actor': None, 'text_actor': None})())
 
         except Exception as e:
             print(f"Error creating collision sphere {name}: {e}")
@@ -646,7 +653,7 @@ class URDFViewer(QMainWindow):
             actor.SetUserTransform(vtk_transform)
 
             self.renderer.AddActor(actor)
-            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda t: self._update_actor_transform(actor, t), 'axes_actor': None, 'text_actor': None})())
+            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t), 'axes_actor': None, 'text_actor': None})())
 
         except Exception as e:
             print(f"Error creating collision cylinder {name}: {e}")
