@@ -87,7 +87,7 @@ TRANSLATIONS = {
 
     # === 语言切换 ===
     "language": {"zh_CN": "语言：", "en": "Language:"},
-    "lang_zh": {"zh_CN": "简体中文", "en": "简体中文"},
+    "lang_zh": {"zh_CN": "简体中文", "en": "Simplified Chinese"},
     "lang_en": {"zh_CN": "English", "en": "English"},
 
     # === 关节控制区 ===
