@@ -28,17 +28,17 @@ class DecompDialog(QDialog):
         
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle("Decompose Collision Meshes")
+        self.setWindowTitle("凸分解碰撞网格")
         self.setMinimumWidth(600)
         self.setMinimumHeight(400)
-        
+
         # Main layout
         main_layout = QVBoxLayout(self)
-        
+
         # Create table for mesh files and maxConvexHulls values
         self.mesh_table = QTableWidget()
         self.mesh_table.setColumnCount(2)  # Mesh file, maxConvexHulls
-        self.mesh_table.setHorizontalHeaderLabels(["Mesh File", "maxConvexHulls"])
+        self.mesh_table.setHorizontalHeaderLabels(["网格文件", "maxConvexHulls"])
         
         # Set row count
         self.mesh_table.setRowCount(len(self.collision_mesh_files))
@@ -75,11 +75,11 @@ class DecompDialog(QDialog):
         
         # Create buttons at the bottom
         buttons_layout = QHBoxLayout()
-        
-        self.btn_cancel = QPushButton("Cancel")
+
+        self.btn_cancel = QPushButton("取消")
         self.btn_cancel.clicked.connect(self.reject)
-        
-        self.btn_ok = QPushButton("OK")
+
+        self.btn_ok = QPushButton("确定")
         self.btn_ok.clicked.connect(self.accept)
         
         buttons_layout.addStretch()
@@ -121,15 +121,15 @@ class DecompDialog(QDialog):
             # Show success message
             QMessageBox.information(
                 self,
-                "Decomposition Complete",
-                f"Successfully decomposed {len(all_decomposed_files)} mesh files."
+                "分解完成",
+                f"成功分解了 {len(all_decomposed_files)} 个网格文件。"
             )
         except Exception as e:
             # Show error message if decomposition fails
             QMessageBox.critical(
                 self,
-                "Decomposition Error",
-                f"Error during decomposition: {str(e)}"
+                "分解错误",
+                f"分解过程中出错: {str(e)}"
             )
     
     def get_decomposed_mesh_files(self):

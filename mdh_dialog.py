@@ -140,7 +140,7 @@ class MDHDialog(QDialog):
         
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle(f"MDH Parameters - {self.chain_name}")
+        self.setWindowTitle(f"MDH 参数 - {self.chain_name}")
         self.setMinimumWidth(1000)
         self.setMinimumHeight(600)
         
@@ -167,14 +167,14 @@ class MDHDialog(QDialog):
         left_layout = QVBoxLayout(left_widget)
         
         # Add title
-        title_label = QLabel("MDH Parameters")
+        title_label = QLabel("MDH 参数")
         title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         left_layout.addWidget(title_label)
-        
+
         # Create table for MDH parameters
         self.mdh_table = QTableWidget()
         self.mdh_table.setColumnCount(5)  # Joint, theta, d, a, alpha
-        self.mdh_table.setHorizontalHeaderLabels(["Joint", "θ (rad)", "d", "a", "α (rad)"])
+        self.mdh_table.setHorizontalHeaderLabels(["关节", "θ (rad)", "d", "a", "α (rad)"])
         
         # Set row count
         self.mdh_table.setRowCount(len(self.mdh_parameters))
@@ -182,7 +182,7 @@ class MDHDialog(QDialog):
         # Fill table with MDH parameters
         for i, params in enumerate(self.mdh_parameters):
             # Joint name
-            joint_item = QTableWidgetItem(f"Joint {i+1}")
+            joint_item = QTableWidgetItem(f"关节 {i+1}")
             self.mdh_table.setItem(i, 0, joint_item)
             
             # MDH parameters: theta, d, a, alpha
@@ -198,16 +198,16 @@ class MDHDialog(QDialog):
         # Create buttons
         buttons_layout = QHBoxLayout()
         
-        self.btn_forward_kinematics = QPushButton("Forward Kinematics")
+        self.btn_forward_kinematics = QPushButton("正向运动学")
         self.btn_forward_kinematics.clicked.connect(self.on_forward_kinematics)
-        
-        self.btn_jacobian = QPushButton("Jacobian")
+
+        self.btn_jacobian = QPushButton("雅可比矩阵")
         self.btn_jacobian.clicked.connect(self.on_jacobian)
-        
-        self.btn_dynamic_base_regressor = QPushButton("Dynamic Base Regressor")
+
+        self.btn_dynamic_base_regressor = QPushButton("动力学回归器")
         self.btn_dynamic_base_regressor.clicked.connect(self.on_dynamic_base_regressor)
-        
-        self.btn_save_mdh = QPushButton("Save MDH")
+
+        self.btn_save_mdh = QPushButton("保存 MDH")
         self.btn_save_mdh.clicked.connect(self.on_save_mdh)
         
         buttons_layout.addWidget(self.btn_forward_kinematics)
@@ -229,21 +229,21 @@ class MDHDialog(QDialog):
         vertical_splitter = QSplitter(Qt.Vertical)
         
         # Top section for .h header file
-        header_group = QGroupBox("Header File or Python Usage")
+        header_group = QGroupBox("头文件或 Python 使用方法")
 
         header_layout = QVBoxLayout(header_group)
-        
+
         # Add copy button for header
         header_button_layout = QHBoxLayout()
-        self.btn_copy_header = QPushButton("Copy")
+        self.btn_copy_header = QPushButton("复制")
         self.btn_copy_header.clicked.connect(self.on_copy_header)
         header_button_layout.addWidget(self.btn_copy_header)
         header_button_layout.addStretch()
         header_layout.addLayout(header_button_layout)
-        
+
         self.header_text_edit = QTextEdit()
         self.header_text_edit.setReadOnly(True)
-        self.header_text_edit.setPlaceholderText("Header file or Python usage content will be displayed here...")
+        self.header_text_edit.setPlaceholderText("头文件或 Python 使用方法内容将显示在这里...")
         # Set monospace font for code
         font = QFont("Consolas", 10)
         font.setStyleHint(QFont.Monospace)
@@ -251,22 +251,22 @@ class MDHDialog(QDialog):
         # Add syntax highlighter
         self.header_highlighter = CppSyntaxHighlighter(self.header_text_edit.document())
         header_layout.addWidget(self.header_text_edit)
-        
+
         # Bottom section for .cpp file
-        cpp_group = QGroupBox(".cpp Source File")
+        cpp_group = QGroupBox(".cpp 源文件")
         cpp_layout = QVBoxLayout(cpp_group)
-        
+
         # Add copy button for cpp
         cpp_button_layout = QHBoxLayout()
-        self.btn_copy_cpp = QPushButton("Copy")
+        self.btn_copy_cpp = QPushButton("复制")
         self.btn_copy_cpp.clicked.connect(self.on_copy_cpp)
         cpp_button_layout.addWidget(self.btn_copy_cpp)
         cpp_button_layout.addStretch()
         cpp_layout.addLayout(cpp_button_layout)
-        
+
         self.cpp_text_edit = QTextEdit()
         self.cpp_text_edit.setReadOnly(True)
-        self.cpp_text_edit.setPlaceholderText("Source file content will be displayed here...")
+        self.cpp_text_edit.setPlaceholderText("源文件内容将显示在这里...")
         # Set monospace font for code
         font = QFont("Consolas", 10)
         font.setStyleHint(QFont.Monospace)
@@ -329,7 +329,7 @@ class MDHDialog(QDialog):
         # Fill table with new MDH parameters
         for i, params in enumerate(self.mdh_parameters):
             # Joint name
-            joint_item = QTableWidgetItem(f"Joint {i+1}")
+            joint_item = QTableWidgetItem(f"关节 {i+1}")
             self.mdh_table.setItem(i, 0, joint_item)
             
             # MDH parameters: theta, d, a, alpha
@@ -341,43 +341,43 @@ class MDHDialog(QDialog):
         """Save MDH parameters to a text file"""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save MDH Parameters",
+            "保存 MDH 参数",
             f"{self.chain_name}_mdh_parameters.txt",
-            "Text Files (*.txt)"
+            "文本文件 (*.txt)"
         )
-        
+
         if file_path:
             try:
                 with open(file_path, 'w') as f:
                     # Write header
-                    f.write(f"MDH Parameters for {self.chain_name}\n")
+                    f.write(f"{self.chain_name} 的 MDH 参数\n")
                     f.write("=" * 50 + "\n\n")
-                    
+
                     # Write column headers
-                    f.write(f"{'Joint':<10} {'theta (rad)':<12} {'d':<12} {'a':<12} {'α (rad)':<12}\n")
+                    f.write(f"{'关节':<10} {'theta (rad)':<12} {'d':<12} {'a':<12} {'α (rad)':<12}\n")
                     f.write("-" * 60 + "\n")
-                    
+
                     # Write MDH parameters
                     for i, params in enumerate(self.mdh_parameters):
-                        joint_name = f"Joint {i+1}"
+                        joint_name = f"关节 {i+1}"
                         theta, d, a, alpha = params
                         f.write(f"{joint_name:<10} {theta:<4.8f} {d:<4.8f} {a:<4.8f} {alpha:<4.8f}\n")
-                    
+
                     f.write("\n" + "=" * 50 + "\n")
-                    f.write(f"Total joints: {len(self.mdh_parameters)}\n")
-                
-                QMessageBox.information(self, "Success", f"MDH parameters saved to:\n{file_path}")
+                    f.write(f"关节数量: {len(self.mdh_parameters)}\n")
+
+                QMessageBox.information(self, "成功", f"MDH 参数已保存到:\n{file_path}")
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to save MDH parameters:\n{str(e)}")
-    
+                QMessageBox.critical(self, "错误", f"保存 MDH 参数失败:\n{str(e)}")
+
     def on_copy_header(self):
         """Copy header code to clipboard"""
         clipboard = QApplication.clipboard()
         clipboard.setText(self.header_text_edit.toPlainText())
-        QMessageBox.information(self, "Copied", "Header code copied to clipboard!")
-    
+        QMessageBox.information(self, "已复制", "头文件代码已复制到剪贴板!")
+
     def on_copy_cpp(self):
         """Copy source code to clipboard"""
         clipboard = QApplication.clipboard()
         clipboard.setText(self.cpp_text_edit.toPlainText())
-        QMessageBox.information(self, "Copied", "Source code copied to clipboard!")
+        QMessageBox.information(self, "已复制", "源文件代码已复制到剪贴板!")

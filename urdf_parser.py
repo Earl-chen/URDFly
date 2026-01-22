@@ -56,20 +56,55 @@ class URDFParser:
                 geometry = collision.find("geometry")
                 if geometry is not None:
                     mesh = geometry.find("mesh")
-                    if link.get('name') in self.links:       
-                        if mesh is not None:
-                            filename = mesh.get("filename")
-                            # Store the mesh filename and its visual properties
-                            self.links[link.get("name")]['collision_mesh'] = filename
-                            self.links[link.get("name")]['collision_origin'] = self.parse_origin(collision.find("origin"))
+                    box = geometry.find("box")
+                    sphere = geometry.find("sphere")
+                    cylinder = geometry.find("cylinder")
 
-                        else:
+                    if link.get('name') in self.links:
+                        self.links[link.get("name")]['collision_origin'] = self.parse_origin(collision.find("origin"))
+
+                        if mesh is not None:
+                            # Mesh file collision
+                            filename = mesh.get("filename")
+                            self.links[link.get("name")]['collision_type'] = 'mesh'
+                            self.links[link.get("name")]['collision_mesh'] = filename
+                        elif box is not None:
+                            # Box geometry collision
+                            size = list(map(float, box.get("size", "0 0 0").split()))
+                            self.links[link.get("name")]['collision_type'] = 'box'
+                            self.links[link.get("name")]['collision_box_size'] = size
                             self.links[link.get("name")]['collision_mesh'] = None
-                            self.links[link.get("name")]['collision_origin'] = None
+                        elif sphere is not None:
+                            # Sphere geometry collision
+                            radius = float(sphere.get("radius", "0"))
+                            self.links[link.get("name")]['collision_type'] = 'sphere'
+                            self.links[link.get("name")]['collision_sphere_radius'] = radius
+                            self.links[link.get("name")]['collision_mesh'] = None
+                        elif cylinder is not None:
+                            # Cylinder geometry collision
+                            radius = float(cylinder.get("radius", "0"))
+                            length = float(cylinder.get("length", "0"))
+                            self.links[link.get("name")]['collision_type'] = 'cylinder'
+                            self.links[link.get("name")]['collision_cylinder_radius'] = radius
+                            self.links[link.get("name")]['collision_cylinder_length'] = length
+                            self.links[link.get("name")]['collision_mesh'] = None
+                        else:
+                            # Unknown geometry type
+                            self.links[link.get("name")]['collision_type'] = None
+                            self.links[link.get("name")]['collision_mesh'] = None
                 else:
-                    if link.get('name') in self.links:    
+                    if link.get('name') in self.links:
+                        self.links[link.get("name")]['collision_type'] = None
                         self.links[link.get("name")]['collision_mesh'] = None
                         self.links[link.get("name")]['collision_origin'] = None
+
+            # Parse inertial properties (mass, center of mass, inertia)
+            inertial = link.find("inertial")
+            if link.get('name') in self.links:
+                if inertial is not None:
+                    self.links[link.get("name")]['inertial'] = self.parse_inertial(inertial)
+                else:
+                    self.links[link.get("name")]['inertial'] = None
 
 
         # Extract all joints
@@ -81,6 +116,7 @@ class URDFParser:
                 "child": joint.find("child").get("link"),
                 "origin": self.parse_origin(joint.find("origin")),
                 "axis": self.parse_axis(joint.find("axis")),
+                "limit": self.parse_limit(joint.find("limit")),
             }
             self.joints.append(joint_data)
             
@@ -110,6 +146,64 @@ class URDFParser:
         if axis_element is None:
             return [0, 0, 1]
         return list(map(float, axis_element.get("xyz", "0 0 1").split()))
+
+    def parse_inertial(self, inertial_element):
+        """Parse inertial element to get mass, center of mass, and inertia tensor"""
+        origin = self.parse_origin(inertial_element.find("origin"))
+
+        # Parse mass
+        mass_elem = inertial_element.find("mass")
+        if mass_elem is not None:
+            mass = float(mass_elem.get("value", "0"))
+        else:
+            mass = None
+
+        # Parse inertia tensor
+        inertia_elem = inertial_element.find("inertia")
+        inertia = None
+        if inertia_elem is not None:
+            inertia = {
+                "ixx": float(inertia_elem.get("ixx", "0")),
+                "ixy": float(inertia_elem.get("ixy", "0")),
+                "ixz": float(inertia_elem.get("ixz", "0")),
+                "iyy": float(inertia_elem.get("iyy", "0")),
+                "iyz": float(inertia_elem.get("iyz", "0")),
+                "izz": float(inertia_elem.get("izz", "0")),
+            }
+
+        return {
+            "origin": origin,
+            "mass": mass,
+            "inertia": inertia
+        }
+
+    def parse_limit(self, limit_element):
+        """Parse limit element to get joint limits"""
+        if limit_element is None:
+            # 返回默认值 (-π 到 π)
+            return {"lower": -math.pi, "upper": math.pi, "effort": 0.0, "velocity": 0.0}
+
+        lower = limit_element.get("lower")
+        upper = limit_element.get("upper")
+        effort = limit_element.get("effort", "0")
+        velocity = limit_element.get("velocity", "0")
+
+        # 如果 lower/upper 不存在，使用默认值
+        if lower is None:
+            lower = -math.pi
+        else:
+            lower = float(lower)
+        if upper is None:
+            upper = math.pi
+        else:
+            upper = float(upper)
+
+        return {
+            "lower": lower,
+            "upper": upper,
+            "effort": float(effort),
+            "velocity": float(velocity)
+        }
 
     def compute_transformation(self, rpy, xyz):
         """Compute 4x4 transformation matrix from RPY and XYZ"""
@@ -253,6 +347,8 @@ class URDFParser:
         
         collision_mesh_files = []
         collision_mesh_transformations = []
+        collision_link_names = []  # Track which link each collision mesh belongs to
+        collision_geometries = []  # Store collision geometry type and parameters
         
         # For joint frames
         joint_names = []
@@ -261,6 +357,7 @@ class URDFParser:
         joint_axes = []
         joint_parent_links = []
         joint_child_links = []
+        joint_limits = []  # 添加关节限制列表
 
         # Process each link
         for name, T in transformations.items():
@@ -293,24 +390,59 @@ class URDFParser:
             link_mesh_transformations.append(T_total)
             link_frames.append(T)
             link_colors.append(color)
-                
-            # Process collision
-            if link_info.get("collision_mesh") is not None:
-                mesh_file = link_info["collision_mesh"]
-                if not os.path.isabs(mesh_file):
-                    mesh_file = os.path.join(self.mesh_dir, mesh_file)
-                mesh_file = os.path.normpath(mesh_file)
-                
-                T_collision = self.compute_transformation(
-                    link_info["collision_origin"]["rpy"], link_info["collision_origin"]["xyz"]
-                )
+
+            # Process collision - handle all geometry types
+            collision_type = link_info.get("collision_type")
+            if collision_type is not None:
+                # Get collision origin transformation
+                if link_info.get("collision_origin") is not None:
+                    T_collision = self.compute_transformation(
+                        link_info["collision_origin"]["rpy"], link_info["collision_origin"]["xyz"]
+                    )
+                else:
+                    T_collision = self.compute_transformation([0, 0, 0], [0, 0, 0])
 
                 # Combine with the link's transformation
                 T_total = T @ T_collision
-                collision_mesh_files.append(mesh_file)
-                collision_mesh_transformations.append(T_total)
 
-            
+                if collision_type == 'mesh':
+                    # Mesh file collision
+                    mesh_file = link_info["collision_mesh"]
+                    if not os.path.isabs(mesh_file):
+                        mesh_file = os.path.join(self.mesh_dir, mesh_file)
+                    mesh_file = os.path.normpath(mesh_file)
+                    collision_mesh_files.append(mesh_file)
+                    collision_mesh_transformations.append(T_total)
+                    collision_link_names.append(name)
+                    collision_geometries.append({'type': 'mesh', 'file': mesh_file})
+
+                elif collision_type == 'box':
+                    # Box geometry collision
+                    size = link_info.get("collision_box_size", [0, 0, 0])
+                    collision_mesh_files.append(None)  # No mesh file for basic shapes
+                    collision_mesh_transformations.append(T_total)
+                    collision_link_names.append(name)
+                    collision_geometries.append({'type': 'box', 'size': size})
+
+                elif collision_type == 'sphere':
+                    # Sphere geometry collision
+                    radius = link_info.get("collision_sphere_radius", 0)
+                    collision_mesh_files.append(None)
+                    collision_mesh_transformations.append(T_total)
+                    collision_link_names.append(name)
+                    collision_geometries.append({'type': 'sphere', 'radius': radius})
+
+                elif collision_type == 'cylinder':
+                    # Cylinder geometry collision
+                    radius = link_info.get("collision_cylinder_radius", 0)
+                    length = link_info.get("collision_cylinder_length", 0)
+                    collision_mesh_files.append(None)
+                    collision_mesh_transformations.append(T_total)
+                    collision_link_names.append(name)
+                    collision_geometries.append({'type': 'cylinder', 'radius': radius, 'length': length})
+
+            # No fallback to visual mesh - if there's no collision, skip it
+
         # Process each joint
         for joint in self.joints:
             parent = joint["parent"]
@@ -337,6 +469,7 @@ class URDFParser:
             joint_axes.append(joint["axis"])
             joint_parent_links.append(parent)
             joint_child_links.append(child)
+            joint_limits.append(joint["limit"])  # 添加关节限制
 
         return (
             link_names,
@@ -350,9 +483,11 @@ class URDFParser:
             joint_axes,
             joint_parent_links,
             joint_child_links,
+            joint_limits,  # 添加关节限制到返回值
             collision_mesh_files,
             collision_mesh_transformations,
-
+            collision_link_names,  # Add collision link names
+            collision_geometries,  # Add collision geometry types and parameters
         )
     
     def build_multiple_trees(self):

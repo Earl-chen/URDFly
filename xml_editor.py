@@ -128,7 +128,7 @@ class XMLEditor(QMainWindow):
     
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle("URDF Editor")
+        self.setWindowTitle("URDF 编辑器")
         # Set window size
         window_width = 1200
         window_height = 800
@@ -148,14 +148,14 @@ class XMLEditor(QMainWindow):
         toolbar_layout = QHBoxLayout()
         
         # Create save as button
-        self.btn_save_as = QPushButton("Save As")
+        self.btn_save_as = QPushButton("另存为")
         self.btn_save_as.clicked.connect(self.save_file_as)
         toolbar_layout.addWidget(self.btn_save_as)
-        
+
         # Create update button
-        self.btn_update = QPushButton("Update")
+        self.btn_update = QPushButton("更新")
         self.btn_update.clicked.connect(self.update_model)
-        self.btn_update.setToolTip("Update the model in the viewer without saving the file")
+        self.btn_update.setToolTip("更新查看器中的模型而不保存文件")
         toolbar_layout.addWidget(self.btn_update)
         
         # Add spacer to push the file path label to the right
@@ -170,27 +170,27 @@ class XMLEditor(QMainWindow):
         
         # Create search bar layout
         search_layout = QHBoxLayout()
-        
+
         # Create search label
-        search_label = QLabel("Search:")
+        search_label = QLabel("搜索：")
         search_layout.addWidget(search_label)
-        
+
         # Create search input field
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Enter search text...")
+        self.search_input.setPlaceholderText("输入搜索文本...")
         self.search_input.returnPressed.connect(self.find_next)
         search_layout.addWidget(self.search_input)
-        
+
         # Create previous button
-        self.btn_prev = QPushButton("Previous")
+        self.btn_prev = QPushButton("上一个")
         self.btn_prev.clicked.connect(self.find_previous)
-        self.btn_prev.setToolTip("Find previous occurrence (Shift+F3)")
+        self.btn_prev.setToolTip("查找上一个出现位置 (Shift+F3)")
         search_layout.addWidget(self.btn_prev)
-        
+
         # Create next button
-        self.btn_next = QPushButton("Next")
+        self.btn_next = QPushButton("下一个")
         self.btn_next.clicked.connect(self.find_next)
-        self.btn_next.setToolTip("Find next occurrence (F3)")
+        self.btn_next.setToolTip("查找下一个出现位置 (F3)")
         search_layout.addWidget(self.btn_next)
         
         # Add search layout to main layout
@@ -216,14 +216,14 @@ class XMLEditor(QMainWindow):
         autofill_layout.addWidget(self.btn_pi_quarter)
         
         # Add precision label and spinbox
-        precision_label = QLabel("Precision:")
+        precision_label = QLabel("精度：")
         autofill_layout.addWidget(precision_label)
-        
+
         self.precision_spinbox = QSpinBox()
         self.precision_spinbox.setMinimum(1)
         self.precision_spinbox.setMaximum(15)
         self.precision_spinbox.setValue(6)  # Default precision is 6
-        self.precision_spinbox.setToolTip("Number of decimal places for π values")
+        self.precision_spinbox.setToolTip("π 值的小数位数")
         autofill_layout.addWidget(self.precision_spinbox)
         
         # Add spacer to push everything to the left
@@ -269,26 +269,26 @@ class XMLEditor(QMainWindow):
                 self.file_path = file_path
                 self.update_file_path_label()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load file: {str(e)}")
-    
+            QMessageBox.critical(self, "错误", f"加载文件失败: {str(e)}")
+
     def save_file(self):
         """Save the current file"""
         if not self.file_path:
             self.save_file_as()
             return
-        
+
         try:
             with open(self.file_path, 'w', encoding='utf-8') as file:
                 content = self.text_edit.toPlainText()
                 file.write(content)
-            QMessageBox.information(self, "Success", "File saved successfully.")
+            QMessageBox.information(self, "成功", "文件保存成功。")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save file: {str(e)}")
-    
+            QMessageBox.critical(self, "错误", f"保存文件失败: {str(e)}")
+
     def save_file_as(self):
         """Save the current file with a new name"""
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save File As", "", "URDF Files (*.urdf)"
+            self, "另存为", "", "URDF 文件 (*.urdf)"
         )
         
         if file_path:
@@ -300,18 +300,18 @@ class XMLEditor(QMainWindow):
         """Update the file path label"""
         if self.file_path:
             self.file_path_label.setText(self.file_path)
-            self.setWindowTitle(f"URDF Editor - {os.path.basename(self.file_path)}")
+            self.setWindowTitle(f"URDF 编辑器 - {os.path.basename(self.file_path)}")
         else:
-            self.file_path_label.setText("No file loaded")
-            self.setWindowTitle("URDF Editor")
-    
+            self.file_path_label.setText("未加载文件")
+            self.setWindowTitle("URDF 编辑器")
+
     def update_model(self):
         """Update the model in the viewer with the current text content"""
         if self.update_callback:
             content = self.text_edit.toPlainText()
             self.update_callback(content)
         else:
-            QMessageBox.warning(self, "Warning", "Update callback not set.")
+            QMessageBox.warning(self, "警告", "未设置更新回调。")
     
     def find_text(self, text, forward=True, start_position=None):
         """Find text in the editor
@@ -399,8 +399,8 @@ class XMLEditor(QMainWindow):
             found = self.find_text(text, forward=True, start_position=start_pos)
             
             if not found:
-                QMessageBox.information(self, "Search", "No more occurrences found.")
-    
+                QMessageBox.information(self, "搜索", "没有找到更多匹配项。")
+
     def find_previous(self):
         """Find the previous occurrence of the search text"""
         text = self.search_input.text()
@@ -410,16 +410,16 @@ class XMLEditor(QMainWindow):
                 cursor = self.text_edit.textCursor()
                 cursor.movePosition(QTextCursor.End)
                 self.last_search_position = cursor.position()
-            
+
             # Start from the beginning of the current selection
             cursor = self.text_edit.textCursor()
             start_pos = cursor.selectionStart()
-            
+
             # Find the previous occurrence
             found = self.find_text(text, forward=False, start_position=start_pos)
-            
+
             if not found:
-                QMessageBox.information(self, "Search", "No more occurrences found.")
+                QMessageBox.information(self, "搜索", "没有找到更多匹配项。")
     
     def closeEvent(self, event):
         """Handle window close event"""

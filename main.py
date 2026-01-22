@@ -93,11 +93,31 @@ class URDFViewer(QMainWindow):
         self.chains = []  # List to store kinematic chains
         self.mdh_frames_actors = []  # List to store MDH frame actors
         self.mdh_text_actors = []  # List to store MDH frame text actors
+
+        # === 新增：质心(COM)可视化相关 ===
+        self.com_actors = []  # List to store center of mass actors
+        # Store COM actor info: {'actor': actor, 'link_name': name, 'T_com_rel': T_com}
+        # T_com_rel 是质心相对于连杆坐标系的变换矩阵
+        self.com_actor_info = []
+
+        # === 新增：惯量盒可视化相关 ===
+        self.inertia_actors = []  # List to store inertia box actors
+        # Store inertia actor info: {'actor': actor, 'link_name': name, 'T_com_rel': T_com}
+        # T_com_rel 是惯量盒中心相对于连杆坐标系的变换矩阵
+        self.inertia_actor_info = []
+
+        # === 新增：关节轴可视化相关 ===
+        self.joint_axis_actors = []  # List to store joint axis actors
+        # Store joint axis info: {'actor': actor, 'joint_name': name, 'axis': axis}
+        # axis 是关节的旋转轴方向（在关节局部坐标系中）
+        self.joint_axis_info = []
+
         self.selected_chain = None  # Currently selected chain
         self.selected_chain_index = 0  # Index of the currently selected chain
         self.current_urdf_file = None  # Path to the currently loaded URDF file
         self.collision_mesh_files = None
-        
+        self.inertial_data = []  # List to store inertial data for each link
+
         self.joint_sliders = []  # List to store joint angle sliders
         self.joint_values = []  # List to store joint angle values
         self.revolute_joints = []  # List to store revolute joints
@@ -136,13 +156,13 @@ class URDFViewer(QMainWindow):
 
         # Create chain selection combo box
         chain_selection_layout = QVBoxLayout()
-        chain_selection_layout.addWidget(QLabel("Select Chain:"))
+        chain_selection_layout.addWidget(QLabel("选择运动链："))
         self.chain_combo = QComboBox()
         self.chain_combo.currentIndexChanged.connect(self.on_chain_selected)
         chain_selection_layout.addWidget(self.chain_combo)
-        
+
         # Create link list widget
-        chain_selection_layout.addWidget(QLabel("Links:"))
+        chain_selection_layout.addWidget(QLabel("连杆："))
         self.link_list = QListWidget()
         self.link_list.setSelectionMode(QListWidget.SingleSelection)
         self.link_list.itemSelectionChanged.connect(self.on_link_selection_changed)
@@ -153,22 +173,22 @@ class URDFViewer(QMainWindow):
         chain_selection_widget.setLayout(chain_selection_layout)
 
         # Create button for opening URDF file
-        btn_open = QPushButton("Open URDF")
+        btn_open = QPushButton("打开 URDF")
         btn_open.clicked.connect(self.open_urdf_file)
-        
+
         # Create Edit button
-        btn_edit = QPushButton("Edit URDF")
+        btn_edit = QPushButton("编辑 URDF")
         btn_edit.clicked.connect(self.edit_urdf_file)
-        btn_edit.setToolTip("Open the current URDF file in an XML editor")
+        btn_edit.setToolTip("在 XML 编辑器中打开当前 URDF 文件")
 
         # Create MDH button
-        btn_mdh = QPushButton("Show MDH Parameters")
+        btn_mdh = QPushButton("显示 MDH 参数")
         btn_mdh.clicked.connect(self.show_mdh_parameters)
-        
-        btn_decomp = QPushButton("Decompose As Collision")
+
+        btn_decomp = QPushButton("凸分解碰撞体")
         btn_decomp.clicked.connect(self.decompose_collision_meshes)
 
-        btn_set_joints = QPushButton("Set Joints")
+        btn_set_joints = QPushButton("设置关节")
         btn_set_joints.clicked.connect(self.open_set_joints_dialog)
 
         # Create transparency controls
@@ -176,7 +196,7 @@ class URDFViewer(QMainWindow):
         transparency_layout = QVBoxLayout()
 
         # Transparency slider
-        transparency_layout.addWidget(QLabel("Transparency:"))
+        transparency_layout.addWidget(QLabel("透明度："))
         self.transparency_slider = QSlider(Qt.Horizontal)
         self.transparency_slider.setMinimum(0)
         self.transparency_slider.setMaximum(100)
@@ -189,29 +209,70 @@ class URDFViewer(QMainWindow):
         transparency_group.setLayout(transparency_layout)
 
         # Create checkboxes for frame visibility
-        visibility_group = QGroupBox("Visibility")
+        visibility_group = QGroupBox("显示设置")
         visibility_layout = QVBoxLayout()
-        
-        self.cb_link_frames = QCheckBox("Show Link Frames")
-        self.cb_link_frames.setChecked(True)
-        self.cb_link_frames.stateChanged.connect(self.toggle_link_frames)
-        
-        self.cb_mdh_frames = QCheckBox("Show MDH Frames")
-        self.cb_mdh_frames.setChecked(False)
-        self.cb_mdh_frames.stateChanged.connect(self.toggle_mdh_frames)
-        
-        self.cb_collision = QCheckBox("Show Collision")
+
+        # === 新增：视觉显示控制 ===
+        self.cb_visual = QCheckBox("显示视觉")
+        self.cb_visual.setChecked(True)
+        self.cb_visual.stateChanged.connect(self.toggle_visual)
+
+        # === 新增：关节轴显示控制 ===
+        self.cb_joint_axes = QCheckBox("显示关节轴")
+        self.cb_joint_axes.setChecked(False)
+        self.cb_joint_axes.stateChanged.connect(self.toggle_joint_axes)
+
+        # === 新增：碰撞体显示控制 ===
+        self.cb_collision = QCheckBox("显示碰撞体")
         self.cb_collision.setChecked(True)
         self.cb_collision.stateChanged.connect(self.toggle_collision)
-        
+
+        # === 新增：质心显示控制 ===
+        self.cb_com = QCheckBox("显示质心 (COM)")
+        self.cb_com.setChecked(False)
+        self.cb_com.stateChanged.connect(self.toggle_com)
+
+        # === 新增：惯量显示控制 ===
+        self.cb_inertia = QCheckBox("显示惯量")
+        self.cb_inertia.setChecked(False)
+        self.cb_inertia.stateChanged.connect(self.toggle_inertia)
+
+        self.cb_link_frames = QCheckBox("显示连杆坐标系")
+        self.cb_link_frames.setChecked(True)
+        self.cb_link_frames.stateChanged.connect(self.toggle_link_frames)
+
+        self.cb_mdh_frames = QCheckBox("显示 MDH 坐标系")
+        self.cb_mdh_frames.setChecked(False)
+        self.cb_mdh_frames.stateChanged.connect(self.toggle_mdh_frames)
+
+        self.cb_joint_axes = QCheckBox("显示关节轴")
+        self.cb_joint_axes.setChecked(False)
+        self.cb_joint_axes.stateChanged.connect(self.toggle_joint_axes)
+
+        self.cb_collision = QCheckBox("显示碰撞体")
+        self.cb_collision.setChecked(True)
+        self.cb_collision.stateChanged.connect(self.toggle_collision)
+
+        self.cb_com = QCheckBox("显示质心 (COM)")
+        self.cb_com.setChecked(False)
+        self.cb_com.stateChanged.connect(self.toggle_com)
+
+        self.cb_inertia = QCheckBox("显示惯量")
+        self.cb_inertia.setChecked(False)
+        self.cb_inertia.stateChanged.connect(self.toggle_inertia)
+
+        visibility_layout.addWidget(self.cb_visual)
         visibility_layout.addWidget(self.cb_link_frames)
         visibility_layout.addWidget(self.cb_mdh_frames)
+        visibility_layout.addWidget(self.cb_joint_axes)
         visibility_layout.addWidget(self.cb_collision)
+        visibility_layout.addWidget(self.cb_com)
+        visibility_layout.addWidget(self.cb_inertia)
 
         visibility_group.setLayout(visibility_layout)
 
         # Add widgets to left panel
-        left_layout.addWidget(QLabel("Robot Structure:"))
+        left_layout.addWidget(QLabel("机器人结构："))
         left_layout.addWidget(chain_selection_widget)
         left_layout.addWidget(btn_open)
         left_layout.addWidget(btn_edit)
@@ -224,7 +285,7 @@ class URDFViewer(QMainWindow):
         left_layout.addStretch()
         
         # Add current file label at the bottom of left panel
-        self.current_file_label = QLabel("Current File: None")
+        self.current_file_label = QLabel("当前文件：无")
         self.current_file_label.setWordWrap(True)
         self.current_file_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
         left_layout.addWidget(self.current_file_label)
@@ -246,7 +307,7 @@ class URDFViewer(QMainWindow):
         self.joint_layout = QVBoxLayout(self.joint_container)
         
         # Add a label explaining the sliders
-        joint_label = QLabel("Adjust joint angles:")
+        joint_label = QLabel("调整关节角度：")
         self.joint_layout.addWidget(joint_label)
         
         # We'll add sliders dynamically when a URDF is loaded
@@ -255,14 +316,14 @@ class URDFViewer(QMainWindow):
         joint_scroll_area.setWidget(self.joint_container)
         
         # Create a group box to contain the scroll area
-        joint_group = QGroupBox("Joints Control")
+        joint_group = QGroupBox("关节控制")
         joint_group_layout = QVBoxLayout(joint_group)
-        
+
         # Add reset and random buttons
         buttons_layout = QHBoxLayout()
-        btn_reset = QPushButton("Reset")
+        btn_reset = QPushButton("重置")
         btn_reset.clicked.connect(self.reset_joints)
-        btn_random = QPushButton("Random")
+        btn_random = QPushButton("随机")
         btn_random.clicked.connect(self.randomize_joints)
         buttons_layout.addWidget(btn_reset)
         buttons_layout.addWidget(btn_random)
@@ -344,10 +405,13 @@ class URDFViewer(QMainWindow):
                 joint_axes,
                 joint_parent_links,
                 joint_child_links,
+                joint_limits,
                 collision_mesh_files,
                 collision_mesh_transformations,
+                collision_link_names,
+                collision_geometries,
                 ) = parser.get_robot_info()
-                
+
                 # Store revolute joints for slider controls
                 self.revolute_joints = []
                 for i, joint_type in enumerate(joint_types):
@@ -357,15 +421,17 @@ class URDFViewer(QMainWindow):
                             'index': i,
                             'parent': joint_parent_links[i],
                             'child': joint_child_links[i],
-                            'axis': joint_axes[i]
+                            'axis': joint_axes[i],
+                            'lower': joint_limits[i]['lower'],
+                            'upper': joint_limits[i]['upper']
                         })
-                
+
                 # Create joint sliders
                 self.create_joint_sliders()
-                
+
                 # Get chain information
                 self.chains, trees = parser.get_chain_info()
-                
+
                 # Create models for each link
                 for i in range(len(link_names)):
                     self.add_urdf_model(
@@ -375,17 +441,42 @@ class URDFViewer(QMainWindow):
                         link_frames[i],
                         link_colors[i],
                     )
-                
+
                 # Create models for each collision link
-                for i in range(len(collision_mesh_files)):
-                    self.add_urdf_model(
-                        f"collision_{i}",
-                        collision_mesh_files[i],
-                        collision_mesh_transformations[i],
-                        None,
-                        None,
-                        model_type='collision'
-                    )
+                for i, geom in enumerate(collision_geometries):
+                    geom_type = geom['type']
+                    if geom_type == 'mesh':
+                        # Use mesh file
+                        self.add_urdf_model(
+                            f"collision_{i}",
+                            collision_mesh_files[i],
+                            collision_mesh_transformations[i],
+                            None,
+                            None,
+                            model_type='collision'
+                        )
+                    elif geom_type == 'box':
+                        # Create box geometry directly
+                        self.add_collision_box(
+                            f"collision_{i}",
+                            geom['size'],
+                            collision_mesh_transformations[i]
+                        )
+                    elif geom_type == 'sphere':
+                        # Create sphere geometry directly
+                        self.add_collision_sphere(
+                            f"collision_{i}",
+                            geom['radius'],
+                            collision_mesh_transformations[i]
+                        )
+                    elif geom_type == 'cylinder':
+                        # Create cylinder geometry directly
+                        self.add_collision_cylinder(
+                            f"collision_{i}",
+                            geom['radius'],
+                            geom['length'],
+                            collision_mesh_transformations[i]
+                        )
                     
                 
                 # use link mesh files to be decomposed
@@ -407,13 +498,13 @@ class URDFViewer(QMainWindow):
 
             except Exception as e:
                 QMessageBox.critical(
-                    self, "Error", f"Failed to load URDF file: {str(e)}"
+                    self, "错误", f"加载 URDF 文件失败: {str(e)}"
                 )
     
     def open_urdf_file(self):
         """Open a URDF file dialog and load the selected file"""
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Open URDF File", "", "URDF Files (*.urdf)"
+            self, "打开 URDF 文件", "", "URDF 文件 (*.urdf)"
         )
         
         if filename:
@@ -452,8 +543,104 @@ class URDFViewer(QMainWindow):
 
         except Exception as e:
             QMessageBox.warning(
-                self, "Warning", f"Failed to load model {name}: {str(e)}"
+                self, "警告", f"加载模型 {name} 失败: {str(e)}"
             )
+
+    # === 新增：创建基本几何形状碰撞体 ===
+    # 当 URDF 中的碰撞体使用基本几何形状（box/sphere/cylinder）而非 mesh 文件时，
+    # 直接使用 VTK 的几何体源创建相应的碰撞体可视化
+    def add_collision_box(self, name, size, transform):
+        """Add a box collision geometry to the scene"""
+        try:
+            # Create box source
+            cube = vtk.vtkCubeSource()
+            cube.SetXLength(size[0])
+            cube.SetYLength(size[1])
+            cube.SetZLength(size[2])
+            cube.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(cube.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(0.3, 0.6, 1.0)  # Light blue
+            actor.GetProperty().SetOpacity(0.4)  # Semi-transparent
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda t: self._update_actor_transform(actor, t), 'axes_actor': None, 'text_actor': None})())
+
+        except Exception as e:
+            print(f"Error creating collision box {name}: {e}")
+
+    def add_collision_sphere(self, name, radius, transform):
+        """Add a sphere collision geometry to the scene"""
+        try:
+            # Create sphere source
+            sphere = vtk.vtkSphereSource()
+            sphere.SetRadius(radius)
+            sphere.SetPhiResolution(16)
+            sphere.SetThetaResolution(16)
+            sphere.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(sphere.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(0.3, 0.6, 1.0)  # Light blue
+            actor.GetProperty().SetOpacity(0.4)  # Semi-transparent
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda t: self._update_actor_transform(actor, t), 'axes_actor': None, 'text_actor': None})())
+
+        except Exception as e:
+            print(f"Error creating collision sphere {name}: {e}")
+
+    def add_collision_cylinder(self, name, radius, length, transform):
+        """Add a cylinder collision geometry to the scene"""
+        try:
+            # Create cylinder source
+            cylinder = vtk.vtkCylinderSource()
+            cylinder.SetRadius(radius)
+            cylinder.SetHeight(length)
+            cylinder.SetResolution(16)
+            cylinder.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(cylinder.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(0.3, 0.6, 1.0)  # Light blue
+            actor.GetProperty().SetOpacity(0.4)  # Semi-transparent
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+            self.models_collision.append(type('obj', (object,), {'actor': actor, 'name': name, 'apply_transform': lambda t: self._update_actor_transform(actor, t), 'axes_actor': None, 'text_actor': None})())
+
+        except Exception as e:
+            print(f"Error creating collision cylinder {name}: {e}")
+
+    def _update_actor_transform(self, actor, transform_matrix):
+        """Helper method to update actor transform"""
+        vtk_transform = vtk.vtkTransform()
+        vtk_transform.SetMatrix(transform_matrix.flatten())
+        actor.SetUserTransform(vtk_transform)
 
     def clear_models(self):
         """Clear all models from the scene"""
@@ -463,7 +650,7 @@ class URDFViewer(QMainWindow):
             self.renderer.RemoveActor(model.axes_actor)
             if hasattr(model, 'text_actor') and model.text_actor is not None:
                 self.renderer.RemoveActor(model.text_actor)
-                
+
         for model in self.models_collision:
             self.renderer.RemoveActor(model.actor)
             self.renderer.RemoveActor(model.axes_actor)
@@ -478,24 +665,45 @@ class URDFViewer(QMainWindow):
         # Clear the combo box and link list
         self.chain_combo.clear()
         self.link_list.clear()
-        
+
         # Clear joint sliders
         self.clear_joint_sliders()
-        
+
         # Clear MDH frames
         for actor in self.mdh_frames_actors:
             self.renderer.RemoveActor(actor)
         self.mdh_frames_actors = []
-        
+
         # Clear MDH text actors
         for text_actor in self.mdh_text_actors:
             self.renderer.RemoveActor(text_actor)
         self.mdh_text_actors = []
-        
+
+        # Clear COM actors
+        for actor in self.com_actors:
+            self.renderer.RemoveActor(actor)
+        self.com_actors = []
+
+        # Clear inertia actors
+        for actor in self.inertia_actors:
+            self.renderer.RemoveActor(actor)
+        self.inertia_actors = []
+
+        # Clear joint axis actors
+        for actor in self.joint_axis_actors:
+            self.renderer.RemoveActor(actor)
+        self.joint_axis_actors = []
+        self.joint_axis_info = []
+
+        # Clear inertial data
+        self.inertial_data = []
+        self.com_actor_info = []
+        self.inertia_actor_info = []
+
         # Reset selected chain and current URDF file
         self.selected_chain = None
         self.current_urdf_file = None
-        
+
         # Update current file label
         self.update_current_file_label()
 
@@ -506,10 +714,10 @@ class URDFViewer(QMainWindow):
         """Populate the chain combo box and link list"""
         self.chain_combo.clear()
         self.link_list.clear()
-        
+
         # Add each chain to the combo box
         for i, chain in enumerate(self.chains):
-            self.chain_combo.addItem(f"Chain {i+1}: {chain['name']}", i)
+            self.chain_combo.addItem(f"运动链 {i+1}: {chain['name']}", i)
         
         # Select the first chain by default if available
         if self.chains:
@@ -568,17 +776,29 @@ class URDFViewer(QMainWindow):
                     print(model.link_frame)
         # Update the rendering
         self.vtk_widget.GetRenderWindow().Render()
-        
+
+    # === 新增：视觉显示切换 ===
+    def toggle_visual(self, state):
+        """Toggle visibility of visual models"""
+        visible = state == Qt.Checked
+
+        for model in self.models:
+            model.actor.SetVisibility(visible)
+
+        # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
+    # === 新增：碰撞体显示切换 ===
     def toggle_collision(self, state):
         visible = state == Qt.Checked
-        
+
         for model in self.models_collision:
             model.actor.SetVisibility(visible)
             if model.axes_actor is not None:
                 model.axes_actor.SetVisibility(visible)
             if hasattr(model, 'text_actor') and model.text_actor is not None:
                 model.text_actor.SetVisibility(visible)
-        
+
         # Update the rendering
         self.vtk_widget.GetRenderWindow().Render()
 
@@ -602,17 +822,17 @@ class URDFViewer(QMainWindow):
         if visible:
             if not self.current_urdf_file:
                 QMessageBox.warning(
-                    self, "Warning", "Please load a URDF file first. [MDH]"
+                    self, "警告", "请先加载 URDF 文件。[MDH]"
                 )
                 self.cb_mdh_frames.setChecked(False)
                 return
-            
+
             if self.selected_chain:
                 # Always recreate MDH frames to ensure they're up to date
                 self.create_mdh_frames(self.selected_chain)
             else:
                 QMessageBox.warning(
-                    self, "Warning", "Please select a chain first."
+                    self, "警告", "请先选择一个运动链。"
                 )
                 self.cb_mdh_frames.setChecked(False)
                 return
@@ -710,17 +930,89 @@ class URDFViewer(QMainWindow):
         # Update the rendering
         self.vtk_widget.GetRenderWindow().Render()
 
+    # === 新增：关节轴显示切换 ===
+    def toggle_joint_axes(self, state):
+        """Toggle visibility of joint axes"""
+        visible = state == Qt.Checked
+
+        if visible:
+            if not self.current_urdf_file:
+                QMessageBox.warning(
+                    self, "警告", "请先加载 URDF 文件。[关节轴]"
+                )
+                self.cb_joint_axes.setChecked(False)
+                return
+            # Create joint axes if not already created
+            if not self.joint_axis_actors:
+                self.create_joint_axes()
+            for actor in self.joint_axis_actors:
+                actor.SetVisibility(True)
+        else:
+            for actor in self.joint_axis_actors:
+                actor.SetVisibility(False)
+
+        # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
+    # === 新增：质心显示切换 ===
+    def toggle_com(self, state):
+        """Toggle visibility of center of mass markers"""
+        visible = state == Qt.Checked
+
+        if visible:
+            if not self.current_urdf_file:
+                QMessageBox.warning(
+                    self, "警告", "请先加载 URDF 文件。[质心]"
+                )
+                self.cb_com.setChecked(False)
+                return
+            # Create COM markers if not already created
+            if not self.com_actors:
+                self.create_com_markers()
+            for actor in self.com_actors:
+                actor.SetVisibility(True)
+        else:
+            for actor in self.com_actors:
+                actor.SetVisibility(False)
+
+        # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
+    # === 新增：惯量显示切换 ===
+    def toggle_inertia(self, state):
+        """Toggle visibility of inertia boxes"""
+        visible = state == Qt.Checked
+
+        if visible:
+            if not self.current_urdf_file:
+                QMessageBox.warning(
+                    self, "警告", "请先加载 URDF 文件。[惯量]"
+                )
+                self.cb_inertia.setChecked(False)
+                return
+            # Create inertia boxes if not already created
+            if not self.inertia_actors:
+                self.create_inertia_boxes()
+            for actor in self.inertia_actors:
+                actor.SetVisibility(True)
+        else:
+            for actor in self.inertia_actors:
+                actor.SetVisibility(False)
+
+        # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
     def show_mdh_parameters(self):
         """Show MDH parameters in a dialog"""
         if not self.selected_chain:
             QMessageBox.warning(
-                self, "Warning", "Please select a chain first to view MDH parameters."
+                self, "警告", "请先选择一个运动链以查看 MDH 参数。"
             )
             return
-        
+
         if not self.current_urdf_file:
             QMessageBox.warning(
-                self, "Warning", "Please load a URDF file first. [SHOW MDH]"
+                self, "警告", "请先加载 URDF 文件。[显示 MDH]"
             )
             return
         
@@ -751,14 +1043,14 @@ class URDFViewer(QMainWindow):
     def open_set_joints_dialog(self):
         """Open a dialog to input joint angles and apply them to the robot and sliders."""
         if not self.revolute_joints:
-            QMessageBox.warning(self, "Warning", "No revolute joints available. Load a URDF first.")
+            QMessageBox.warning(self, "警告", "没有可用的旋转关节。请先加载 URDF 文件。")
             return
-        
+
         dialog = QDialog(self)
-        dialog.setWindowTitle("Set Joints")
+        dialog.setWindowTitle("设置关节")
         vbox = QVBoxLayout(dialog)
-        
-        vbox.addWidget(QLabel("Enter joint angles (comma or space separated):"))
+
+        vbox.addWidget(QLabel("输入关节角度（用逗号或空格分隔）："))
         angles_edit = QLineEdit()
         # Pre-fill with current values in currently selected unit for convenience
         try:
@@ -774,17 +1066,17 @@ class URDFViewer(QMainWindow):
         vbox.addWidget(angles_edit)
         
         units_row = QHBoxLayout()
-        units_row.addWidget(QLabel("Units:"))
+        units_row.addWidget(QLabel("单位："))
         units_combo = QComboBox()
         units_combo.addItems(["rad", "deg"])
         units_combo.setCurrentText("deg" if self.display_in_degrees else "rad")
         units_row.addWidget(units_combo)
         units_row.addStretch(1)
         vbox.addLayout(units_row)
-        
+
         buttons_row = QHBoxLayout()
-        btn_apply = QPushButton("Apply")
-        btn_cancel = QPushButton("Cancel")
+        btn_apply = QPushButton("应用")
+        btn_cancel = QPushButton("取消")
         buttons_row.addStretch(1)
         buttons_row.addWidget(btn_cancel)
         buttons_row.addWidget(btn_apply)
@@ -793,18 +1085,18 @@ class URDFViewer(QMainWindow):
         def parse_and_apply():
             raw = angles_edit.text().strip()
             if not raw:
-                QMessageBox.warning(dialog, "Warning", "Please input angles.")
+                QMessageBox.warning(dialog, "警告", "请输入角度值。")
                 return
             # Support comma or whitespace separated values
             tokens = raw.replace(",", " ").split()
             try:
                 vals = [float(t) for t in tokens]
             except ValueError:
-                QMessageBox.critical(dialog, "Error", "Invalid number in input list.")
+                QMessageBox.critical(dialog, "错误", "输入列表中包含无效数字。")
                 return
             n = len(self.revolute_joints)
             if len(vals) != n:
-                QMessageBox.warning(dialog, "Warning", f"Expected {n} values, got {len(vals)}.")
+                QMessageBox.warning(dialog, "警告", f"需要 {n} 个值，收到 {len(vals)} 个。")
                 return
             # Convert to radians if needed
             if units_combo.currentText() == "deg":
@@ -846,46 +1138,76 @@ class URDFViewer(QMainWindow):
         """Create sliders for controlling joint angles"""
         # Clear existing sliders
         self.clear_joint_sliders()
-        
+
         # Initialize joint values array with zeros
         self.joint_values = [0.0] * len(self.revolute_joints)
         self.joint_value_labels = []
-        
+
         # Create a slider for each revolute joint
         for i, joint in enumerate(self.revolute_joints):
+            # 获取关节限制（从 URDF 中读取）
+            lower = joint.get('lower', -math.pi)
+            upper = joint.get('upper', math.pi)
+
             # Create a group for this joint
             joint_box = QGroupBox(joint['name'])
             joint_box_layout = QVBoxLayout(joint_box)
-            
+
+            # 添加范围标签
+            range_label = QLabel(f"范围: {self.format_angle(lower)} ~ {self.format_angle(upper)}")
+            range_label.setStyleSheet("color: gray; font-size: 10px;")
+            joint_box_layout.addWidget(range_label)
+
             # Create a horizontal layout for slider and value label
             slider_layout = QHBoxLayout()
-            
+
+            # 显示最小值标签
+            min_label = QLabel(f"{lower:.2f}")
+            min_label.setStyleSheet("color: gray; font-size: 9px;")
+            min_label.setMaximumWidth(35)
+            slider_layout.addWidget(min_label)
+
+            # Create a label to show the current value (需要在 slider 之前创建，因为 lambda 会引用它)
+            value_label = QLabel(self.format_angle(0.0))
+            value_label.setMinimumWidth(60)
+            value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
             # Create a slider
             slider = QSlider(Qt.Horizontal)
-            slider.setMinimum(-314)  # -π in hundredths
-            slider.setMaximum(314)   # π in hundredths
+            slider.setMinimum(int(lower * 100))  # 转换为百分之一弧度
+            slider.setMaximum(int(upper * 100))   # 转换为百分之一弧度
             slider.setValue(0)       # Default to 0
             slider.setTickPosition(QSlider.TicksBelow)
-            slider.setTickInterval(157)  # π/2 in hundredths
-            
-            # Create a label to show the current value
-            value_label = QLabel(self.format_angle(0.0))
-            value_label.setMinimumWidth(40)  # Set minimum width to ensure consistent alignment
-            value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # Right-align the text
-            
+            # 计算合适的刻度间隔
+            range_val = upper - lower
+            if range_val >= 2 * math.pi:
+                tick_interval = int(math.pi / 2 * 100)  # π/2
+            elif range_val >= math.pi:
+                tick_interval = int(math.pi / 4 * 100)   # π/4
+            else:
+                tick_interval = int(range_val / 4 * 100)  # 范围的1/4
+            slider.setTickInterval(max(1, tick_interval))
+
             # Connect the slider to update function
             slider.valueChanged.connect(lambda val, idx=i, label=value_label: self.update_joint_angle(val, idx, label))
-            
-            # Add slider and label to the horizontal layout
+
             slider_layout.addWidget(slider, 1)  # Give slider a stretch factor of 1
+
+            # 显示最大值标签
+            max_label = QLabel(f"{upper:.2f}")
+            max_label.setStyleSheet("color: gray; font-size: 9px;")
+            max_label.setMaximumWidth(35)
+            max_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            slider_layout.addWidget(max_label)
+
             slider_layout.addWidget(value_label)
-            
+
             # Add the horizontal layout to the joint box
             joint_box_layout.addLayout(slider_layout)
-            
+
             # Add the joint box to the joint layout
             self.joint_layout.addWidget(joint_box)
-            
+
             # Store the slider for later access
             self.joint_sliders.append(slider)
             self.joint_value_labels.append(value_label)
@@ -983,8 +1305,11 @@ class URDFViewer(QMainWindow):
         joint_axes,
         joint_parent_links,
         joint_child_links,
+        _,
         collision_mesh_files,
         collision_mesh_transformations,
+        collision_link_names,
+        collision_geometries,
         ) = parser.get_robot_info(qs=self.joint_values)
         
         # Update existing models with new transformations
@@ -1006,26 +1331,122 @@ class URDFViewer(QMainWindow):
                     vtk_transform.SetMatrix(link_frames[i].flatten())
                     transformed_point = vtk_transform.TransformPoint(z_endpoint[0], z_endpoint[1], z_endpoint[2])
                     model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
-                    
-        # Update existing models with new transformations
+
+        # === 新增：更新碰撞体 ===
+        # 建立从连杆名称到碰撞体变换的映射，然后更新每个碰撞体的位置和方向
+        # Build a map from link name to collision transform
+        collision_transform_map = {}
+        for i, link_name in enumerate(collision_link_names):
+            collision_transform_map[link_name] = collision_mesh_transformations[i]
+
         for i, model in enumerate(self.models_collision):
-            # Update mesh transformation
-            model.apply_transform(collision_mesh_transformations[i])
-            
-            # Update axes and text actors
-            if model.axes_actor:
-                vtk_transform = vtk.vtkTransform()
-                vtk_transform.SetMatrix(collision_mesh_transformations[i].flatten())
-                model.axes_actor.SetUserTransform(vtk_transform)
-            
-            if model.text_actor:
-                # Update text position based on new frame
-                z_endpoint = [0, 0, 0.05, 1]  # Same axis_length as in create_axes_actor
-                vtk_transform = vtk.vtkTransform()
-                vtk_transform.SetMatrix(collision_mesh_transformations[i].flatten())
-                transformed_point = vtk_transform.TransformPoint(z_endpoint[0], z_endpoint[1], z_endpoint[2])
-                model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
-        
+            # Extract link index from model name (format: "collision_{i}")
+            if model.name.startswith("collision_"):
+                collision_idx = int(model.name.split("_")[1])
+                if collision_idx < len(collision_link_names):
+                    link_name = collision_link_names[collision_idx]
+                    if link_name in collision_transform_map:
+                        # Update mesh transformation
+                        model.apply_transform(collision_transform_map[link_name])
+
+                        # Update axes and text actors
+                        if model.axes_actor:
+                            vtk_transform = vtk.vtkTransform()
+                            vtk_transform.SetMatrix(collision_transform_map[link_name].flatten())
+                            model.axes_actor.SetUserTransform(vtk_transform)
+
+                        if model.text_actor:
+                            # Update text position based on new frame
+                            z_endpoint = [0, 0, 0.05, 1]
+                            vtk_transform = vtk.vtkTransform()
+                            vtk_transform.SetMatrix(collision_transform_map[link_name].flatten())
+                            transformed_point = vtk_transform.TransformPoint(z_endpoint[0], z_endpoint[1], z_endpoint[2])
+                            model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
+
+        # === 新增：更新关节轴 ===
+        # 根据新的关节位置和旋转，更新关节轴圆柱体的位置和方向
+        # 关节轴的局部坐标系中的方向需要通过关节的旋转矩阵变换到世界坐标系
+        if hasattr(self, 'joint_axis_info') and self.joint_axis_info:
+            # Build a map from joint name to joint frame
+            joint_name_to_frame = {name: frame for name, frame in zip(joint_names, joint_frames)}
+            joint_name_to_axis = {name: axis for name, axis in zip(joint_names, joint_axes)}
+
+            for info in self.joint_axis_info:
+                actor = info['actor']
+                joint_name = info['joint_name']
+                axis = info['axis']
+
+                if joint_name in joint_name_to_frame:
+                    joint_frame = joint_name_to_frame[joint_name]
+
+                    # Recreate transform for joint axis
+                    vtk_transform = vtk.vtkTransform()
+
+                    # Extract position from joint_frame
+                    joint_position = joint_frame[:3, 3]
+
+                    # Transform axis from local joint frame to world frame
+                    R_joint = joint_frame[:3, :3]
+                    joint_axis_local = np.array(axis)
+                    joint_axis_local = joint_axis_local / (np.linalg.norm(joint_axis_local) + 1e-10)
+                    joint_axis_world = R_joint @ joint_axis_local
+
+                    # Position at joint origin
+                    vtk_transform.Translate(joint_position[0], joint_position[1], joint_position[2])
+
+                    # Rotate cylinder (default Y axis) to align with joint axis in world frame
+                    y_axis = np.array([0, 1, 0])
+
+                    if not np.allclose(y_axis, joint_axis_world, atol=0.01):
+                        cross = np.cross(y_axis, joint_axis_world)
+                        dot = np.dot(y_axis, joint_axis_world)
+                        angle = math.acos(np.clip(dot, -1, 1))
+                        if np.linalg.norm(cross) > 1e-6:
+                            axis_rot = cross / np.linalg.norm(cross)
+                            vtk_transform.RotateWXYZ(math.degrees(angle), axis_rot[0], axis_rot[1], axis_rot[2])
+
+                    actor.SetUserTransform(vtk_transform)
+
+        # === 新增：更新质心(COM)标记 ===
+        # 根据连杆的新位置，更新质心小球体的世界坐标位置
+        # T_world = link_frame @ T_com_rel (连杆变换 @ 质心相对变换)
+        if hasattr(self, 'com_actor_info') and self.com_actor_info:
+            # Build a map from link name to link frame
+            link_name_to_frame = {name: frame for name, frame in zip(link_names, link_frames)}
+
+            for info in self.com_actor_info:
+                actor = info['actor']
+                link_name = info['link_name']
+                T_com_rel = info['T_com_rel']
+
+                if link_name in link_name_to_frame:
+                    link_frame = link_name_to_frame[link_name]
+                    T_world = link_frame @ T_com_rel
+
+                    vtk_transform = vtk.vtkTransform()
+                    vtk_transform.SetMatrix(T_world.flatten())
+                    actor.SetUserTransform(vtk_transform)
+
+        # === 新增：更新惯量盒 ===
+        # 根据连杆的新位置，更新惯量盒的世界坐标位置
+        # 惯量盒的中心位置根据 URDF 中的 inertial.origin 确定
+        if hasattr(self, 'inertia_actor_info') and self.inertia_actor_info:
+            # Build a map from link name to link frame
+            link_name_to_frame = {name: frame for name, frame in zip(link_names, link_frames)}
+
+            for info in self.inertia_actor_info:
+                actor = info['actor']
+                link_name = info['link_name']
+                T_com_rel = info['T_com_rel']
+
+                if link_name in link_name_to_frame:
+                    link_frame = link_name_to_frame[link_name]
+                    T_world = link_frame @ T_com_rel
+
+                    vtk_transform = vtk.vtkTransform()
+                    vtk_transform.SetMatrix(T_world.flatten())
+                    actor.SetUserTransform(vtk_transform)
+
         # Update MDH frames if they are visible
         if hasattr(self, 'cb_mdh_frames') and self.cb_mdh_frames.isChecked() and self.selected_chain:
             self.create_mdh_frames(self.selected_chain)
@@ -1037,7 +1458,7 @@ class URDFViewer(QMainWindow):
         """Open the current URDF file in the XML editor"""
         if not self.current_urdf_file:
             QMessageBox.warning(
-                self, "Warning", "Please load a URDF file first. [Edit]"
+                self, "警告", "请先加载 URDF 文件。[编辑]"
             )
             return
         
@@ -1078,9 +1499,11 @@ class URDFViewer(QMainWindow):
             joint_axes,
             joint_parent_links,
             joint_child_links,
+            joint_limits,
             collision_mesh_files,
-            collision_mesh_transformations,) = parser.get_robot_info()
-            
+            collision_mesh_transformations,
+            collision_link_names,) = parser.get_robot_info()
+
             # Store revolute joints for slider controls
             self.revolute_joints = []
             for i, joint_type in enumerate(joint_types):
@@ -1090,7 +1513,9 @@ class URDFViewer(QMainWindow):
                         'index': i,
                         'parent': joint_parent_links[i],
                         'child': joint_child_links[i],
-                        'axis': joint_axes[i]
+                        'axis': joint_axes[i],
+                        'lower': joint_limits[i]['lower'],
+                        'upper': joint_limits[i]['upper']
                     })
             
             # Create joint sliders
@@ -1139,23 +1564,23 @@ class URDFViewer(QMainWindow):
             
         except Exception as e:
             QMessageBox.critical(
-                self, "Error", f"Failed to update model from XML: {str(e)}"
+                self, "错误", f"从 XML 更新模型失败: {str(e)}"
             )
-    
+
     def update_current_file_label(self):
         """Update the current file label with the current URDF file path"""
         if self.current_urdf_file:
             # Extract just the filename from the path for cleaner display
             filename = os.path.basename(self.current_urdf_file)
-            self.current_file_label.setText(f"Current File: {filename}")
+            self.current_file_label.setText(f"当前文件：{filename}")
         else:
-            self.current_file_label.setText("Current File: None")
+            self.current_file_label.setText("当前文件：无")
             
     def decompose_collision_meshes(self):
         """Handle decomposition of collision meshes"""
         if not self.collision_mesh_files:
             QMessageBox.warning(
-                self, "Warning", "No collision meshes available. Please load a URDF file first."
+                self, "警告", "没有可用的碰撞网格。请先加载 URDF 文件。"
             )
             return
         
@@ -1167,7 +1592,321 @@ class URDFViewer(QMainWindow):
         if decomposed_mesh_files is not None:
             self.edit_urdf_file(replace_collision=True)
 
-    
+    # === 新增：创建关节轴可视化 ===
+    # 为每个 revolute 或 continuous 类型的关节创建一个圆柱体表示其旋转轴
+    # 圆柱体的方向与关节的旋转轴方向一致
+    def create_joint_axes(self):
+        """Create joint axis visualization for all revolute joints"""
+        if not self.current_urdf_file:
+            return
+
+        parser = URDFParser(self.current_urdf_file)
+        result = parser.get_robot_info(qs=self.joint_values)
+        # result has 14 values: link_names, link_mesh_files, link_mesh_transformations, link_frames, link_colors,
+        #                         joint_names, joint_frames, joint_types, joint_axes, joint_parent_links, joint_child_links,
+        #                         joint_limits, collision_mesh_files, collision_mesh_transformations
+        joint_names = result[5]
+        joint_frames = result[6]
+        joint_types = result[7]
+        joint_axes = result[8]
+
+        print(f"[DEBUG] Total joints: {len(joint_names)}")
+        print(f"[DEBUG] Joint names: {joint_names}")
+        print(f"[DEBUG] Joint types: {joint_types}")
+
+        revolute_count = 0
+        for i, (joint_name, joint_frame, joint_type, axis) in enumerate(zip(joint_names, joint_frames, joint_types, joint_axes)):
+            # Convert joint_name to string in case it's a numpy array
+            joint_name_str = str(joint_name) if hasattr(joint_name, '__iter__') and not isinstance(joint_name, str) else joint_name
+
+            # Only show axes for revolute and continuous joints
+            if joint_type not in ['revolute', 'continuous']:
+                print(f"[DEBUG] Skipping joint {joint_name_str}: type={joint_type}")
+                continue
+
+            revolute_count += 1
+            print(f"[DEBUG] Creating joint axis for: {joint_name_str}, axis={axis}")
+
+            # Create a cylinder for the joint axis - thicker and more visible
+            axis_length = 0.3  # Longer axis
+            cylinder = vtk.vtkCylinderSource()
+            cylinder.SetRadius(0.01)  # Thicker tube
+            cylinder.SetHeight(axis_length)
+            cylinder.SetResolution(16)
+            cylinder.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(cylinder.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(1, 0, 1)  # Magenta for joint axes
+            actor.GetProperty().SetOpacity(1.0)
+
+            # Create transform to position and orient the axis
+            vtk_transform = vtk.vtkTransform()
+
+            # Extract position from joint_frame
+            joint_position = joint_frame[:3, 3]
+
+            # Transform axis from local joint frame to world frame
+            # axis is defined in joint's local coordinate system
+            R_joint = joint_frame[:3, :3]  # Rotation matrix of joint frame
+            joint_axis_local = np.array(axis)
+            joint_axis_local = joint_axis_local / (np.linalg.norm(joint_axis_local) + 1e-10)
+            joint_axis_world = R_joint @ joint_axis_local  # Transform to world coordinates
+
+            print(f"[DEBUG] Joint axis local: {joint_axis_local}, world: {joint_axis_world}")
+
+            # Position at joint origin
+            vtk_transform.Translate(joint_position[0], joint_position[1], joint_position[2])
+
+            # Rotate cylinder (default Y axis) to align with joint axis in world frame
+            y_axis = np.array([0, 1, 0])
+
+            if not np.allclose(y_axis, joint_axis_world, atol=0.01):
+                # Calculate rotation from Y to joint axis (in world coordinates)
+                cross = np.cross(y_axis, joint_axis_world)
+                dot = np.dot(y_axis, joint_axis_world)
+                angle = math.acos(np.clip(dot, -1, 1))
+                print(f"[DEBUG] Rotation angle: {math.degrees(angle):.2f} degrees")
+                if np.linalg.norm(cross) > 1e-6:
+                    axis_rot = cross / np.linalg.norm(cross)
+                    vtk_transform.RotateWXYZ(math.degrees(angle), axis_rot[0], axis_rot[1], axis_rot[2])
+
+            actor.SetUserTransform(vtk_transform)
+            actor.SetVisibility(self.cb_joint_axes.isChecked())
+
+            self.renderer.AddActor(actor)
+            self.joint_axis_actors.append(actor)
+            # Store joint axis info for updates
+            self.joint_axis_info.append({
+                'actor': actor,
+                'joint_name': joint_name_str,
+                'axis': list(axis)  # Store axis direction (local to joint frame)
+            })
+            print(f"[DEBUG] Added actor to renderer. Total actors: {len(self.joint_axis_actors)}")
+
+        print(f"[DEBUG] Created {revolute_count} joint axis actors")
+        self.vtk_widget.GetRenderWindow().Render()
+
+    # === 新增：创建质心(COM)可视化 ===
+    # 为每个有质量的连杆创建一个小球体表示其质心位置
+    # 小球体的位置根据 URDF 中的 inertial.origin 确定
+    def create_com_markers(self):
+        """Create center of mass markers for all links"""
+        if not self.current_urdf_file:
+            return
+
+        parser = URDFParser(self.current_urdf_file)
+        link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
+
+        for link_name, link_frame in zip(link_names, link_frames):
+            # Get inertial data from parser
+            link_info = parser.links.get(link_name)
+            if link_info is None or link_info.get('inertial') is None:
+                continue
+
+            inertial = link_info['inertial']
+            if inertial is None or inertial.get('mass') is None:
+                continue
+
+            # Get COM position relative to link frame
+            com_origin = inertial.get('origin', {})
+            com_xyz = np.array(com_origin.get('xyz', [0, 0, 0]))
+            com_rpy = np.array(com_origin.get('rpy', [0, 0, 0]))
+
+            # Create COM marker (small sphere)
+            sphere = vtk.vtkSphereSource()
+            sphere.SetRadius(0.02)  # 2cm radius
+            sphere.SetPhiResolution(16)
+            sphere.SetThetaResolution(16)
+            sphere.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(sphere.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            # Blender-style: black and white checkerboard pattern
+            # For simplicity, use a distinctive color
+            actor.GetProperty().SetColor(0.5, 0.5, 0.5)  # Gray
+
+            # Calculate transform for COM position
+            # COM is in link frame, need to transform to world frame
+            T_com = self.compute_transformation(com_rpy, com_xyz)
+            T_world = link_frame @ T_com
+
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(T_world.flatten())
+            actor.SetUserTransform(vtk_transform)
+            actor.SetVisibility(self.cb_com.isChecked())
+
+            self.renderer.AddActor(actor)
+            self.com_actors.append(actor)
+
+            # Store COM actor info for updates (T_com is relative to link frame)
+            self.com_actor_info.append({
+                'actor': actor,
+                'link_name': link_name,
+                'T_com_rel': T_com  # COM transform relative to link frame
+            })
+
+            # Store inertial data for later use
+            self.inertial_data.append({
+                'link_name': link_name,
+                'inertial': inertial,
+                'frame': T_world
+            })
+
+    # === 新增：创建惯量盒可视化 ===
+    # 为每个有惯量信息的连杆创建一个长方体表示其等效惯量
+    # 长方体的尺寸根据 URDF 中的惯性张量计算得出（使用 Gazebo 相同的公式）
+    # Ixx = m/12 * (h² + d²), Iyy = m/12 * (w² + d²), Izz = m/12 * (w² + h²)
+    # 反推得：w² = (6/m) * (Iyy + Izz - Ixx), h² = (6/m) * (Ixx + Izz - Iyy), d² = (6/m) * (Ixx + Iyy - Izz)
+    def create_inertia_boxes(self):
+        """Create inertia box visualization for all links"""
+        if not self.current_urdf_file:
+            return
+
+        parser = URDFParser(self.current_urdf_file)
+        link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
+
+        for link_name, link_frame in zip(link_names, link_frames):
+            # Get inertial data from parser
+            link_info = parser.links.get(link_name)
+            if link_info is None or link_info.get('inertial') is None:
+                continue
+
+            inertial = link_info['inertial']
+            if inertial is None or inertial.get('inertia') is None:
+                continue
+
+            inertia = inertial['inertia']
+            mass = inertial.get('mass', 1.0)
+
+            if mass <= 0:
+                continue
+
+            # Calculate inertia box dimensions from principal moments of inertia
+            # For a uniformly dense rectangular box:
+            # Ixx = m/12 * (h^2 + d^2)  (around x-axis)
+            # Iyy = m/12 * (w^2 + d^2)  (around y-axis)
+            # Izz = m/12 * (w^2 + h^2)  (around z-axis)
+            # where w=width(x), h=height(y), d=depth(z)
+            #
+            # Solving for dimensions:
+            # w^2 = (6/m) * (Iyy + Izz - Ixx)
+            # h^2 = (6/m) * (Ixx + Izz - Iyy)
+            # d^2 = (6/m) * (Ixx + Iyy - Izz)
+
+            ixx = max(inertia.get('ixx', 0), 1e-9)
+            iyy = max(inertia.get('iyy', 0), 1e-9)
+            izz = max(inertia.get('izz', 0), 1e-9)
+
+            factor = 6.0 / mass
+
+            # Calculate box dimensions (can be imaginary if inconsistent inertia)
+            width_sq = factor * (iyy + izz - ixx)
+            height_sq = factor * (ixx + izz - iyy)
+            depth_sq = factor * (ixx + iyy - izz)
+
+            # Use absolute value and ensure minimum size
+            box_x = max(0.01, math.sqrt(max(0, width_sq)))
+            box_y = max(0.01, math.sqrt(max(0, height_sq)))
+            box_z = max(0.01, math.sqrt(max(0, depth_sq)))
+
+            # Debug print: show inertia values and computed box dimensions
+            print(f"[INERTIA] Link: {link_name}")
+            print(f"  Mass: {mass:.4f} kg")
+            print(f"  Original inertia: Ixx={ixx:.6f}, Iyy={iyy:.6f}, Izz={izz:.6f}")
+            print(f"  Computed box: w={box_x:.4f}m, h={box_y:.4f}m, d={box_z:.4f}m")
+
+            # Verify: recalculate inertia from box dimensions
+            Ixx_verify = mass / 12.0 * (box_y**2 + box_z**2)
+            Iyy_verify = mass / 12.0 * (box_x**2 + box_z**2)
+            Izz_verify = mass / 12.0 * (box_x**2 + box_y**2)
+
+            # Calculate errors
+            err_xx = abs(Ixx_verify - ixx) / max(ixx, 1e-9) * 100
+            err_yy = abs(Iyy_verify - iyy) / max(iyy, 1e-9) * 100
+            err_zz = abs(Izz_verify - izz) / max(izz, 1e-9) * 100
+
+            print(f"  Verified inertia: Ixx={Ixx_verify:.6f}, Iyy={Iyy_verify:.6f}, Izz={Izz_verify:.6f}")
+            print(f"  Errors: Ixx={err_xx:.2f}%, Iyy={err_yy:.2f}%, Izz={err_zz:.2f}%")
+
+            # Create box
+            cube = vtk.vtkCubeSource()
+            cube.SetXLength(box_x)
+            cube.SetYLength(box_y)
+            cube.SetZLength(box_z)
+            cube.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(cube.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(0.3, 0.6, 1.0)  # Light blue
+            actor.GetProperty().SetOpacity(0.4)  # Semi-transparent
+
+            # Get COM position for inertia box placement
+            com_origin = inertial.get('origin', {})
+            com_xyz = np.array(com_origin.get('xyz', [0, 0, 0]))
+            com_rpy = np.array(com_origin.get('rpy', [0, 0, 0]))
+
+            # Calculate transform
+            T_com = self.compute_transformation(com_rpy, com_xyz)
+            T_world = link_frame @ T_com
+
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(T_world.flatten())
+            actor.SetUserTransform(vtk_transform)
+            actor.SetVisibility(self.cb_inertia.isChecked())
+
+            self.renderer.AddActor(actor)
+            self.inertia_actors.append(actor)
+
+            # Store inertia actor info for updates (T_com is relative to link frame)
+            self.inertia_actor_info.append({
+                'actor': actor,
+                'link_name': link_name,
+                'T_com_rel': T_com  # COM transform relative to link frame
+            })
+
+    def compute_transformation(self, rpy, xyz):
+        """Compute 4x4 transformation matrix from RPY and XYZ"""
+        roll, pitch, yaw = rpy
+
+        # Rotation matrices
+        Rx = np.array([
+            [1, 0, 0],
+            [0, math.cos(roll), -math.sin(roll)],
+            [0, math.sin(roll), math.cos(roll)],
+        ])
+
+        Ry = np.array([
+            [math.cos(pitch), 0, math.sin(pitch)],
+            [0, 1, 0],
+            [-math.sin(pitch), 0, math.cos(pitch)],
+        ])
+
+        Rz = np.array([
+            [math.cos(yaw), -math.sin(yaw), 0],
+            [math.sin(yaw), math.cos(yaw), 0],
+            [0, 0, 1],
+        ])
+
+        # Combined rotation
+        R = Rz @ Ry @ Rx
+
+        # Transformation matrix
+        T = np.eye(4)
+        T[:3, :3] = R
+        T[:3, 3] = xyz
+
+        return T
+
     def closeEvent(self, event):
         """Handle window close event"""
         # Close any open XML editor windows
