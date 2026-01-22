@@ -262,6 +262,11 @@ class URDFViewer(QMainWindow):
         self.cb_link_frames.setChecked(True)
         self.cb_link_frames.stateChanged.connect(self.toggle_link_frames)
 
+        # === 新增：MDH坐标系显示控制 ===
+        self.cb_mdh_frames = QCheckBox(self.translation_manager.tr("show_mdh_frames"))
+        self.cb_mdh_frames.setChecked(False)
+        self.cb_mdh_frames.stateChanged.connect(self.toggle_mdh_frames)
+
         visibility_layout.addWidget(self.cb_visual)
         visibility_layout.addWidget(self.cb_link_frames)
         visibility_layout.addWidget(self.cb_mdh_frames)
