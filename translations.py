@@ -71,7 +71,7 @@ TRANSLATIONS = {
     "set_joints_title": {"zh_CN": "设置关节角度", "en": "Set Joint Angles"},
     "set_joints_info": {"zh_CN": "手动输入所有关节的角度值", "en": "Manually enter angle values for all joints"},
     "joint_name_header": {"zh_CN": "关节", "en": "Joint"},
-    "angle_header": {"zh_CN": f"角度（{current_unit}）", "en": f"Angle ({current_unit})"},
+    "angle_header": {"zh_CN": "角度（{}）", "en": "Angle ({})"},
 
     # === 警告信息 ===
     "warning": {"zh_CN": "警告", "en": "Warning"},
