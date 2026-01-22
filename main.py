@@ -350,7 +350,7 @@ class URDFViewer(QMainWindow):
         joint_group_layout.addWidget(joint_scroll_area)
         
         # Add joint group to right panel
-        right_layout.addWidget(joint_group, 1)  # Give it a stretch factor of 1
+        right_layout.addWidget(self.joint_group, 1)  # Give it a stretch factor of 1
         
         # Set fixed width for right panel
         right_panel.setFixedWidth(300)
