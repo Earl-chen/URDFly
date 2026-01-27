@@ -444,6 +444,9 @@ class MJCFParser:
         joint_child_links = []
         joint_limits = []
 
+        # Store visual geometry info for primitive shapes
+        self._visual_geometries = []
+
         # Process each body (link)
         for i in range(self.model.nbody):
             body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, i)
@@ -471,18 +474,28 @@ class MJCFParser:
                 T_total = T_body @ T_visual
                 mesh_file = link_info['mesh']
                 color = link_info.get('color', [0.5, 0.5, 0.5, 1.0])
+                # Store None for mesh-based visuals
+                self._visual_geometries.append(None)
             elif link_info.get('geom_type') is not None and link_info.get('geom_type') != 'mesh':
-                # Primitive geom - find the geom actor in MuJoCo and use its world transform
+                # Primitive geom - store geometry info for rendering
                 T_visual = self.compute_transformation(
                     link_info["origin"]["rpy"], link_info["origin"]["xyz"]
                 )
                 T_total = T_body @ T_visual
                 mesh_file = None
                 color = link_info.get('color', [0.5, 0.5, 0.5, 1.0])
+                # Store primitive geometry info
+                geom_type = link_info.get('geom_type')
+                geom_size = link_info.get('geom_size', [0.01, 0.01, 0.01])
+                self._visual_geometries.append({
+                    'type': geom_type,
+                    'size': geom_size,
+                })
             else:
                 T_total = T_body
                 mesh_file = None
                 color = None
+                self._visual_geometries.append(None)
 
             link_names.append(body_name)
             link_mesh_files.append(mesh_file)
@@ -580,6 +593,18 @@ class MJCFParser:
             collision_link_names,
             collision_geometries,
         )
+
+    def get_visual_geometries(self):
+        """Return the visual geometry info for primitive shapes.
+
+        Should be called after get_robot_info() to get geometry info for
+        bodies that use primitive shapes instead of mesh files.
+
+        Returns a list parallel to link_names, where each element is either:
+        - None (for mesh-based visuals or empty bodies)
+        - A dict with 'type' and 'size' keys for primitive shapes
+        """
+        return getattr(self, '_visual_geometries', [])
 
     @staticmethod
     def is_valid_mjcf(filepath):

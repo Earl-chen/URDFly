@@ -588,15 +588,79 @@ class URDFViewer(QMainWindow):
                 # Clear chains - MDH features won't work for MJCF
                 self.chains = []
 
+                # Get visual geometry info for primitive shapes
+                visual_geometries = parser.get_visual_geometries()
+
                 # Create models for each link
                 for i in range(len(link_names)):
-                    self.add_urdf_model(
-                        link_names[i],
-                        link_mesh_files[i],
-                        link_mesh_transformations[i],
-                        link_frames[i],
-                        link_colors[i],
-                    )
+                    vis_geom = visual_geometries[i] if i < len(visual_geometries) else None
+
+                    if link_mesh_files[i] is not None:
+                        # Has mesh file - use standard method
+                        self.add_urdf_model(
+                            link_names[i],
+                            link_mesh_files[i],
+                            link_mesh_transformations[i],
+                            link_frames[i],
+                            link_colors[i],
+                        )
+                    elif vis_geom is not None:
+                        # Primitive geometry - use appropriate visual method
+                        geom_type = vis_geom.get('type')
+                        geom_size = vis_geom.get('size', [0.01, 0.01, 0.01])
+
+                        if geom_type == 'box':
+                            self.add_visual_box(
+                                link_names[i],
+                                geom_size,
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i]
+                            )
+                        elif geom_type == 'sphere':
+                            self.add_visual_sphere(
+                                link_names[i],
+                                geom_size[0],  # radius
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i]
+                            )
+                        elif geom_type == 'cylinder':
+                            self.add_visual_cylinder(
+                                link_names[i],
+                                geom_size[0],  # radius
+                                geom_size[1],  # half-length
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i]
+                            )
+                        elif geom_type == 'capsule':
+                            self.add_visual_capsule(
+                                link_names[i],
+                                geom_size[0],  # radius
+                                geom_size[1],  # half-length
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i]
+                            )
+                        else:
+                            # Unknown geometry type, create placeholder
+                            self.add_urdf_model(
+                                link_names[i],
+                                None,
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i],
+                            )
+                    else:
+                        # No visual geometry - create placeholder (small sphere)
+                        self.add_urdf_model(
+                            link_names[i],
+                            None,
+                            link_mesh_transformations[i],
+                            link_frames[i],
+                            link_colors[i],
+                        )
 
                 # Create models for each collision link
                 for i, geom in enumerate(collision_geometries):
@@ -798,6 +862,207 @@ class URDFViewer(QMainWindow):
 
         except Exception as e:
             print(f"Error creating collision cylinder {name}: {e}")
+
+    # === Visual primitive geometry methods for MJCF models ===
+    def add_visual_box(self, name, size, transform, frame, color):
+        """Add a box visual geometry to the scene (for MJCF primitive geoms)"""
+        try:
+            cube = vtk.vtkCubeSource()
+            # MuJoCo size is half-extents, convert to full size
+            cube.SetXLength(size[0] * 2)
+            cube.SetYLength(size[1] * 2)
+            cube.SetZLength(size[2] * 2)
+            cube.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(cube.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            if color:
+                actor.GetProperty().SetColor(color[0], color[1], color[2])
+                if len(color) > 3:
+                    actor.GetProperty().SetOpacity(color[3])
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+
+            # Create a simple model object to track this
+            model_obj = type('obj', (object,), {
+                'actor': actor,
+                'name': name,
+                'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t),
+                'axes_actor': None,
+                'text_actor': None
+            })()
+            self.models.append(model_obj)
+
+        except Exception as e:
+            print(f"Error creating visual box {name}: {e}")
+
+    def add_visual_sphere(self, name, radius, transform, frame, color):
+        """Add a sphere visual geometry to the scene (for MJCF primitive geoms)"""
+        try:
+            sphere = vtk.vtkSphereSource()
+            sphere.SetRadius(radius)
+            sphere.SetPhiResolution(24)
+            sphere.SetThetaResolution(24)
+            sphere.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(sphere.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            if color:
+                actor.GetProperty().SetColor(color[0], color[1], color[2])
+                if len(color) > 3:
+                    actor.GetProperty().SetOpacity(color[3])
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+
+            model_obj = type('obj', (object,), {
+                'actor': actor,
+                'name': name,
+                'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t),
+                'axes_actor': None,
+                'text_actor': None
+            })()
+            self.models.append(model_obj)
+
+        except Exception as e:
+            print(f"Error creating visual sphere {name}: {e}")
+
+    def add_visual_cylinder(self, name, radius, length, transform, frame, color):
+        """Add a cylinder visual geometry to the scene (for MJCF primitive geoms)"""
+        try:
+            cylinder = vtk.vtkCylinderSource()
+            cylinder.SetRadius(radius)
+            # MuJoCo length is half-length, convert to full length
+            cylinder.SetHeight(length * 2)
+            cylinder.SetResolution(24)
+            cylinder.Update()
+
+            # VTK cylinder is along Y-axis, but MuJoCo uses Z-axis
+            # Add a rotation transform
+            rotate_transform = vtk.vtkTransform()
+            rotate_transform.RotateX(90)
+
+            transform_filter = vtk.vtkTransformPolyDataFilter()
+            transform_filter.SetInputConnection(cylinder.GetOutputPort())
+            transform_filter.SetTransform(rotate_transform)
+            transform_filter.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(transform_filter.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            if color:
+                actor.GetProperty().SetColor(color[0], color[1], color[2])
+                if len(color) > 3:
+                    actor.GetProperty().SetOpacity(color[3])
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+
+            model_obj = type('obj', (object,), {
+                'actor': actor,
+                'name': name,
+                'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t),
+                'axes_actor': None,
+                'text_actor': None
+            })()
+            self.models.append(model_obj)
+
+        except Exception as e:
+            print(f"Error creating visual cylinder {name}: {e}")
+
+    def add_visual_capsule(self, name, radius, length, transform, frame, color):
+        """Add a capsule visual geometry to the scene (for MJCF primitive geoms)
+
+        Capsule = cylinder + two hemispherical caps
+        """
+        try:
+            # Create capsule using vtkCapsuleSource if available, otherwise approximate
+            # VTK 9+ has vtkCapsuleSource
+            try:
+                capsule = vtk.vtkCapsuleSource()
+                capsule.SetRadius(radius)
+                # MuJoCo length is half-length of the cylindrical part
+                capsule.SetCylinderLength(length * 2)
+                capsule.SetPhiResolution(24)
+                capsule.SetThetaResolution(24)
+                capsule.Update()
+
+                # VTK capsule is along Y-axis, rotate to Z-axis
+                rotate_transform = vtk.vtkTransform()
+                rotate_transform.RotateX(90)
+
+                transform_filter = vtk.vtkTransformPolyDataFilter()
+                transform_filter.SetInputConnection(capsule.GetOutputPort())
+                transform_filter.SetTransform(rotate_transform)
+                transform_filter.Update()
+
+                mapper = vtk.vtkPolyDataMapper()
+                mapper.SetInputConnection(transform_filter.GetOutputPort())
+            except AttributeError:
+                # Fallback: use cylinder if vtkCapsuleSource not available
+                cylinder = vtk.vtkCylinderSource()
+                cylinder.SetRadius(radius)
+                cylinder.SetHeight(length * 2 + radius * 2)  # Approximate capsule length
+                cylinder.SetResolution(24)
+                cylinder.Update()
+
+                rotate_transform = vtk.vtkTransform()
+                rotate_transform.RotateX(90)
+
+                transform_filter = vtk.vtkTransformPolyDataFilter()
+                transform_filter.SetInputConnection(cylinder.GetOutputPort())
+                transform_filter.SetTransform(rotate_transform)
+                transform_filter.Update()
+
+                mapper = vtk.vtkPolyDataMapper()
+                mapper.SetInputConnection(transform_filter.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            if color:
+                actor.GetProperty().SetColor(color[0], color[1], color[2])
+                if len(color) > 3:
+                    actor.GetProperty().SetOpacity(color[3])
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+
+            model_obj = type('obj', (object,), {
+                'actor': actor,
+                'name': name,
+                'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t),
+                'axes_actor': None,
+                'text_actor': None
+            })()
+            self.models.append(model_obj)
+
+        except Exception as e:
+            print(f"Error creating visual capsule {name}: {e}")
 
     def _update_actor_transform(self, actor, transform_matrix):
         """Helper method to update actor transform"""
