@@ -1,0 +1,40 @@
+<mujoco model="joint_offset_test">
+  <!-- 测试关节位置偏移的简单模型 -->
+  <compiler angle="radian"/>
+
+  <worldbody>
+    <light pos="0 0 2"/>
+    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.8 0.8 0.8 1"/>
+
+    <!-- 基座 -->
+    <body name="base" pos="0 0 0.5">
+      <geom type="box" size="0.1 0.1 0.1" rgba="0 0 1 1"/>
+
+      <!-- 连杆1: 关节位置与 body 原点重合 -->
+      <body name="link1" pos="0.3 0 0">
+        <joint name="joint1" type="hinge" axis="0 1 0" range="-1.57 1.57"/>
+        <geom type="capsule" size="0.05" fromto="0 0 0 0.2 0 0" rgba="1 0 0 1"/>
+
+        <!-- 连杆2: 关节位置与 body 原点偏移 -->
+        <body name="link2" pos="0.25 0 0">
+          <!-- 关节位置相对于 link2 原点偏移 0.05 -->
+          <joint name="joint2" type="hinge" axis="0 1 0" pos="0.05 0 0" range="-1.57 1.57"/>
+          <geom type="capsule" size="0.04" fromto="0 0 0 0.15 0 0" rgba="0 1 0 1"/>
+
+          <!-- 连杆3: 关节位置有更大偏移 -->
+          <body name="link3" pos="0.2 0 0">
+            <!-- 关节位置相对于 link3 原点偏移 (0.1, 0.05, 0) -->
+            <joint name="joint3" type="hinge" axis="0 0 1" pos="0.1 0.05 0" range="-3.14 3.14"/>
+            <geom type="sphere" size="0.06" rgba="1 1 0 1"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor joint="joint1" gear="100"/>
+    <motor joint="joint2" gear="100"/>
+    <motor joint="joint3" gear="100"/>
+  </actuator>
+</mujoco>
