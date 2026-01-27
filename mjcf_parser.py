@@ -407,6 +407,7 @@ class MJCFParser:
         """Return robot information in the same format as URDFParser.get_robot_info().
 
         Uses MuJoCo's forward kinematics to compute all body/geom positions.
+        Now properly handles multiple geoms per body.
         """
         # Set joint positions if provided
         if qs is not None:
@@ -447,100 +448,125 @@ class MJCFParser:
         # Store visual geometry info for primitive shapes
         self._visual_geometries = []
 
-        # Process each body (link)
-        for i in range(self.model.nbody):
-            body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, i)
+        # Process each geom (not body) for visual geometry
+        # This properly handles multiple geoms per body
+        for g in range(self.model.ngeom):
+            body_id = self.model.geom_bodyid[g]
+            body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, body_id)
             if body_name is None:
-                body_name = f"body_{i}"
+                body_name = f"body_{body_id}"
 
-            link_info = self.links.get(body_name)
-            if link_info is None:
-                continue
+            # Get geom world transformation directly from MuJoCo data
+            geom_pos = self.data.geom_xpos[g]
+            geom_mat = self.data.geom_xmat[g].reshape(3, 3)
 
-            # Get body frame from forward kinematics result
-            body_pos = self.data.xpos[i]
-            body_mat = self.data.xmat[i].reshape(3, 3)
+            T_geom = np.eye(4)
+            T_geom[:3, :3] = geom_mat
+            T_geom[:3, 3] = geom_pos
+
+            # Get body world transformation for link_frames
+            body_pos = self.data.xpos[body_id]
+            body_mat = self.data.xmat[body_id].reshape(3, 3)
 
             T_body = np.eye(4)
             T_body[:3, :3] = body_mat
             T_body[:3, 3] = body_pos
 
-            # Compute visual mesh transformation
-            if link_info.get('mesh') is not None:
-                # Apply geom-local origin offset
-                T_visual = self.compute_transformation(
-                    link_info["origin"]["rpy"], link_info["origin"]["xyz"]
-                )
-                T_total = T_body @ T_visual
-                mesh_file = link_info['mesh']
-                color = link_info.get('color', [0.5, 0.5, 0.5, 1.0])
-                # Store None for mesh-based visuals
+            # Get geom type and properties
+            geom_type = self.model.geom_type[g]
+            rgba = self.model.geom_rgba[g].tolist()
+            color = rgba if any(c > 0 for c in rgba[:3]) else [0.5, 0.5, 0.5, 1.0]
+            size = self.model.geom_size[g].tolist()
+
+            if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
+                # Mesh geometry
+                mesh_id = self.model.geom_dataid[g]
+                if mesh_id >= 0:
+                    mesh_file = self._get_mesh_file(mesh_id)
+                else:
+                    mesh_file = None
                 self._visual_geometries.append(None)
-            elif link_info.get('geom_type') is not None and link_info.get('geom_type') != 'mesh':
-                # Primitive geom - store geometry info for rendering
-                T_visual = self.compute_transformation(
-                    link_info["origin"]["rpy"], link_info["origin"]["xyz"]
-                )
-                T_total = T_body @ T_visual
+            elif geom_type in (mujoco.mjtGeom.mjGEOM_BOX, mujoco.mjtGeom.mjGEOM_SPHERE,
+                               mujoco.mjtGeom.mjGEOM_CYLINDER, mujoco.mjtGeom.mjGEOM_CAPSULE,
+                               mujoco.mjtGeom.mjGEOM_ELLIPSOID):
+                # Primitive geometry
                 mesh_file = None
-                color = link_info.get('color', [0.5, 0.5, 0.5, 1.0])
-                # Store primitive geometry info
-                geom_type = link_info.get('geom_type')
-                geom_size = link_info.get('geom_size', [0.01, 0.01, 0.01])
+                type_name = self._geom_type_name(geom_type)
                 self._visual_geometries.append({
-                    'type': geom_type,
-                    'size': geom_size,
+                    'type': type_name,
+                    'size': size,
                 })
+            elif geom_type == mujoco.mjtGeom.mjGEOM_PLANE:
+                # Skip ground plane for visual
+                continue
+            elif geom_type == mujoco.mjtGeom.mjGEOM_HFIELD:
+                # Skip heightfield for visual
+                continue
             else:
-                T_total = T_body
+                # Unknown or unsupported geometry type
                 mesh_file = None
                 color = None
                 self._visual_geometries.append(None)
 
             link_names.append(body_name)
             link_mesh_files.append(mesh_file)
-            link_mesh_transformations.append(T_total)
+            link_mesh_transformations.append(T_geom)
             link_frames.append(T_body)
             link_colors.append(color)
 
-            # Process collision geometry
-            collision_type = link_info.get('collision_type')
-            if collision_type is not None:
-                if link_info.get('collision_origin') is not None:
-                    T_collision = self.compute_transformation(
-                        link_info["collision_origin"]["rpy"],
-                        link_info["collision_origin"]["xyz"]
-                    )
-                else:
-                    T_collision = np.eye(4)
+        # Process collision geometries (same approach - iterate over geoms)
+        for g in range(self.model.ngeom):
+            body_id = self.model.geom_bodyid[g]
+            body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+            if body_name is None:
+                body_name = f"body_{body_id}"
 
-                T_coll_total = T_body @ T_collision
+            geom_type = self.model.geom_type[g]
 
-                if collision_type == 'mesh':
-                    coll_mesh = link_info.get('collision_mesh')
-                    collision_mesh_files.append(coll_mesh)
-                    collision_mesh_transformations.append(T_coll_total)
+            # Skip ground plane for collision
+            if geom_type == mujoco.mjtGeom.mjGEOM_PLANE:
+                continue
+
+            # Get geom world transformation
+            geom_pos = self.data.geom_xpos[g]
+            geom_mat = self.data.geom_xmat[g].reshape(3, 3)
+
+            T_geom = np.eye(4)
+            T_geom[:3, :3] = geom_mat
+            T_geom[:3, 3] = geom_pos
+
+            size = self.model.geom_size[g].tolist()
+
+            if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
+                mesh_id = self.model.geom_dataid[g]
+                if mesh_id >= 0:
+                    mesh_file = self._get_mesh_file(mesh_id)
+                    collision_mesh_files.append(mesh_file)
+                    collision_mesh_transformations.append(T_geom)
                     collision_link_names.append(body_name)
-                    collision_geometries.append({'type': 'mesh', 'file': coll_mesh})
-                elif collision_type == 'box':
-                    size = link_info.get('collision_box_size', [0, 0, 0])
-                    collision_mesh_files.append(None)
-                    collision_mesh_transformations.append(T_coll_total)
-                    collision_link_names.append(body_name)
-                    collision_geometries.append({'type': 'box', 'size': size})
-                elif collision_type == 'sphere':
-                    radius = link_info.get('collision_sphere_radius', 0)
-                    collision_mesh_files.append(None)
-                    collision_mesh_transformations.append(T_coll_total)
-                    collision_link_names.append(body_name)
-                    collision_geometries.append({'type': 'sphere', 'radius': radius})
-                elif collision_type == 'cylinder':
-                    radius = link_info.get('collision_cylinder_radius', 0)
-                    length = link_info.get('collision_cylinder_length', 0)
-                    collision_mesh_files.append(None)
-                    collision_mesh_transformations.append(T_coll_total)
-                    collision_link_names.append(body_name)
-                    collision_geometries.append({'type': 'cylinder', 'radius': radius, 'length': length})
+                    collision_geometries.append({'type': 'mesh', 'file': mesh_file})
+            elif geom_type == mujoco.mjtGeom.mjGEOM_BOX:
+                collision_mesh_files.append(None)
+                collision_mesh_transformations.append(T_geom)
+                collision_link_names.append(body_name)
+                collision_geometries.append({'type': 'box', 'size': [s * 2 for s in size[:3]]})
+            elif geom_type in (mujoco.mjtGeom.mjGEOM_SPHERE, mujoco.mjtGeom.mjGEOM_ELLIPSOID):
+                # Ellipsoid approximated as sphere using max radius
+                collision_mesh_files.append(None)
+                collision_mesh_transformations.append(T_geom)
+                collision_link_names.append(body_name)
+                collision_geometries.append({'type': 'sphere', 'radius': max(size[:3])})
+            elif geom_type in (mujoco.mjtGeom.mjGEOM_CYLINDER, mujoco.mjtGeom.mjGEOM_CAPSULE):
+                collision_mesh_files.append(None)
+                collision_mesh_transformations.append(T_geom)
+                collision_link_names.append(body_name)
+                collision_geometries.append({'type': 'cylinder', 'radius': size[0], 'length': size[1] * 2})
+            elif geom_type == mujoco.mjtGeom.mjGEOM_HFIELD:
+                # Skip heightfield for now - not supported as collision
+                continue
+            else:
+                # Unknown type - skip
+                continue
 
         # Process each joint
         for i, joint in enumerate(self.joints):
