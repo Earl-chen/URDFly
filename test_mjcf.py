@@ -125,6 +125,69 @@ def test_mjcf_parser(mjcf_file):
     print('='*60)
     return True
 
+
+def test_forward_kinematics(mjcf_file):
+    """测试关节角度变化后的正运动学计算"""
+    print(f"\n{'='*60}")
+    print(f"正运动学测试: {mjcf_file}")
+    print('='*60)
+
+    parser = MJCFParser(mjcf_file)
+
+    # 找出旋转关节数量
+    revolute_joints = [j for j in parser.joints if j['type'] == 'revolute']
+    print(f"\n旋转关节数量: {len(revolute_joints)}")
+
+    if len(revolute_joints) == 0:
+        print("没有旋转关节，跳过正运动学测试")
+        return True
+
+    # 测试不同的关节角度
+    test_angles = [
+        [0.0] * len(revolute_joints),  # 零位
+        [0.5] * len(revolute_joints),  # 正角度
+        [-0.3] * len(revolute_joints),  # 负角度
+    ]
+
+    for angles in test_angles:
+        print(f"\n测试关节角度: {angles}")
+
+        # 调用 get_robot_info 并设置关节角度
+        result = parser.get_robot_info(qs=angles)
+        (link_names, link_mesh_files, link_mesh_transformations, link_frames,
+         link_colors, joint_names, joint_frames, joint_types, joint_axes,
+         joint_parent_links, joint_child_links, joint_limits, _, _, _, _) = result
+
+        # 对比 MuJoCo 计算的位置
+        model = parser.model
+        data = parser.data
+
+        all_correct = True
+        for i, jname in enumerate(joint_names):
+            mj_jnt_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+            if mj_jnt_id >= 0:
+                jnt_pos = model.jnt_pos[mj_jnt_id]
+                body_id = model.jnt_bodyid[mj_jnt_id]
+                body_world_pos = data.xpos[body_id]
+                body_world_mat = data.xmat[body_id].reshape(3, 3)
+                true_pos = body_world_pos + body_world_mat @ jnt_pos
+
+                pos_from_api = joint_frames[i][:3, 3]
+                error = np.linalg.norm(pos_from_api - true_pos)
+
+                if error > 1e-5:
+                    print(f"    ⚠ {jname}: 误差 {error:.6f}")
+                    all_correct = False
+
+        if all_correct:
+            print(f"    ✓ 所有关节位置计算正确")
+
+    print(f"\n{'='*60}")
+    print("正运动学测试完成")
+    print('='*60)
+    return True
+
+
 if __name__ == "__main__":
     # 使用 MuJoCo 自带的测试模型
     default_test = "/home/cm/.local/lib/python3.10/site-packages/mujoco/testdata/model.xml"
@@ -139,3 +202,6 @@ if __name__ == "__main__":
         sys.exit(1)
 
     test_mjcf_parser(test_file)
+
+    # 运行正运动学测试
+    test_forward_kinematics(test_file)
