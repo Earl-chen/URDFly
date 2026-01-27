@@ -558,12 +558,24 @@ class MJCFParser:
                     break
 
             if child_body_id is not None:
-                # Joint frame is at the child body position
+                # Get body world position and orientation
                 body_pos = self.data.xpos[child_body_id]
                 body_mat = self.data.xmat[child_body_id].reshape(3, 3)
+
+                # Get joint position offset in body frame (jnt_pos)
+                # Find the MuJoCo joint index by name
+                mj_jnt_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint["name"])
+                if mj_jnt_id >= 0:
+                    jnt_pos = self.model.jnt_pos[mj_jnt_id]
+                else:
+                    jnt_pos = np.zeros(3)
+
+                # Joint world position = Body world position + Body rotation * jnt_pos
+                joint_world_pos = body_pos + body_mat @ jnt_pos
+
                 joint_frame = np.eye(4)
                 joint_frame[:3, :3] = body_mat
-                joint_frame[:3, 3] = body_pos
+                joint_frame[:3, 3] = joint_world_pos
             else:
                 joint_frame = np.eye(4)
 
