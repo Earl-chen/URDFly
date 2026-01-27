@@ -47,28 +47,29 @@ import vtk
 from urdf_parser import URDFParser
 from urdf_vtk_model import URDFModel
 from simplify_mesh import create_detailed_approximation
+from mjcf_parser import MJCFParser
 
 
 class DragDropVTKWidget(QVTKRenderWindowInteractor):
-    """Custom VTK widget that supports drag-and-drop of URDF files"""
-    
+    """Custom VTK widget that supports drag-and-drop of URDF and MJCF files"""
+
     def __init__(self, parent=None):
         super().__init__()
         self.parent_viewer = parent
         self.setAcceptDrops(True)
-    
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         """Handle drag enter event"""
         if event.mimeData().hasUrls():
-            # Check if any of the dragged files is a URDF file
+            # Check if any of the dragged files is a URDF or MJCF file
             for url in event.mimeData().urls():
                 if url.isLocalFile():
                     file_path = url.toLocalFile()
-                    if file_path.lower().endswith('.urdf'):
+                    if file_path.lower().endswith('.urdf') or file_path.lower().endswith('.xml'):
                         event.acceptProposedAction()
                         return
         event.ignore()
-    
+
     def dropEvent(self, event: QDropEvent):
         """Handle drop event"""
         if event.mimeData().hasUrls():
@@ -79,6 +80,12 @@ class DragDropVTKWidget(QVTKRenderWindowInteractor):
                         # Load the URDF file
                         if self.parent_viewer:
                             self.parent_viewer.load_urdf_file(file_path)
+                        event.acceptProposedAction()
+                        return
+                    elif file_path.lower().endswith('.xml'):
+                        # Load the MJCF file (check if it's a valid MuJoCo XML)
+                        if self.parent_viewer:
+                            self.parent_viewer.load_mjcf_file(file_path)
                         event.acceptProposedAction()
                         return
         event.ignore()
@@ -122,7 +129,8 @@ class URDFViewer(QMainWindow):
 
         self.selected_chain = None  # Currently selected chain
         self.selected_chain_index = 0  # Index of the currently selected chain
-        self.current_urdf_file = None  # Path to the currently loaded URDF file
+        self.current_urdf_file = None  # Path to the currently loaded URDF/MJCF file
+        self.current_parser_type = None  # 'urdf' or 'mjcf'
         self.collision_mesh_files = None
         self.inertial_data = []  # List to store inertial data for each link
 
@@ -511,7 +519,8 @@ class URDFViewer(QMainWindow):
                 
                 # Store the current URDF file path only after successful loading
                 self.current_urdf_file = filename
-                
+                self.current_parser_type = 'urdf'
+
                 # Update the current file label
                 self.update_current_file_label()
 
@@ -521,14 +530,146 @@ class URDFViewer(QMainWindow):
                     self, self.translation_manager.tr("error"), msg.replace("{}", str(e))
                 )
 
+    def load_mjcf_file(self, filename):
+        """Load a MuJoCo MJCF file and visualize the robot"""
+        if filename and os.path.exists(filename):
+            # Check if it's a valid MJCF file
+            if not MJCFParser.is_valid_mjcf(filename):
+                QMessageBox.warning(
+                    self, self.translation_manager.tr("warning"),
+                    self.translation_manager.tr("invalid_mjcf_file")
+                )
+                return
+
+            # Clear previous models
+            self.clear_models()
+
+            # Parse the MJCF file
+            try:
+                parser = MJCFParser(filename)
+
+                # Get robot info for visualization (same format as URDFParser)
+                (link_names,
+                link_mesh_files,
+                link_mesh_transformations,
+                link_frames,
+                link_colors,
+                joint_names,
+                joint_frames,
+                joint_types,
+                joint_axes,
+                joint_parent_links,
+                joint_child_links,
+                joint_limits,
+                collision_mesh_files,
+                collision_mesh_transformations,
+                collision_link_names,
+                collision_geometries,
+                ) = parser.get_robot_info()
+
+                # Store revolute joints for slider controls
+                self.revolute_joints = []
+                for i, joint_type in enumerate(joint_types):
+                    if joint_type == 'revolute':
+                        self.revolute_joints.append({
+                            'name': joint_names[i],
+                            'index': i,
+                            'parent': joint_parent_links[i],
+                            'child': joint_child_links[i],
+                            'axis': joint_axes[i],
+                            'lower': joint_limits[i]['lower'],
+                            'upper': joint_limits[i]['upper']
+                        })
+
+                # Create joint sliders
+                self.create_joint_sliders()
+
+                # MJCF doesn't have the same chain structure as URDF
+                # Clear chains - MDH features won't work for MJCF
+                self.chains = []
+
+                # Create models for each link
+                for i in range(len(link_names)):
+                    self.add_urdf_model(
+                        link_names[i],
+                        link_mesh_files[i],
+                        link_mesh_transformations[i],
+                        link_frames[i],
+                        link_colors[i],
+                    )
+
+                # Create models for each collision link
+                for i, geom in enumerate(collision_geometries):
+                    geom_type = geom['type']
+                    if geom_type == 'mesh':
+                        # Use mesh file
+                        self.add_urdf_model(
+                            f"collision_{i}",
+                            collision_mesh_files[i],
+                            collision_mesh_transformations[i],
+                            None,
+                            None,
+                            model_type='collision'
+                        )
+                    elif geom_type == 'box':
+                        # Create box geometry directly
+                        self.add_collision_box(
+                            f"collision_{i}",
+                            geom['size'],
+                            collision_mesh_transformations[i]
+                        )
+                    elif geom_type == 'sphere':
+                        # Create sphere geometry directly
+                        self.add_collision_sphere(
+                            f"collision_{i}",
+                            geom['radius'],
+                            collision_mesh_transformations[i]
+                        )
+                    elif geom_type == 'cylinder':
+                        # Create cylinder geometry directly
+                        self.add_collision_cylinder(
+                            f"collision_{i}",
+                            geom['radius'],
+                            geom['length'],
+                            collision_mesh_transformations[i]
+                        )
+
+                # use link mesh files to be decomposed
+                self.collision_mesh_files = [f for f in link_mesh_files if f is not None]
+
+                # Populate the chain tree (will be empty for MJCF)
+                self.populate_chain_tree()
+
+                # Reset camera to show all actors
+                self.renderer.ResetCamera()
+                self.vtk_widget.GetRenderWindow().Render()
+
+                # Store the current file path only after successful loading
+                self.current_urdf_file = filename
+                self.current_parser_type = 'mjcf'
+
+                # Update the current file label
+                self.update_current_file_label()
+
+            except Exception as e:
+                msg = self.translation_manager.tr("load_mjcf_failed")
+                QMessageBox.critical(
+                    self, self.translation_manager.tr("error"), msg.replace("{}", str(e))
+                )
+
     def open_urdf_file(self):
-        """Open a URDF file dialog and load the selected file"""
+        """Open a URDF/MJCF file dialog and load the selected file"""
         filename, _ = QFileDialog.getOpenFileName(
-            self, self.translation_manager.tr("dialog_open_urdf"), "", self.translation_manager.tr("dialog_urdf_filter")
+            self, self.translation_manager.tr("dialog_open_robot"),
+            "",
+            self.translation_manager.tr("dialog_robot_filter")
         )
 
         if filename:
-            self.load_urdf_file(filename)
+            if filename.lower().endswith('.urdf'):
+                self.load_urdf_file(filename)
+            elif filename.lower().endswith('.xml'):
+                self.load_mjcf_file(filename)
 
     def add_urdf_model(self, name, mesh_file, mesh_transform, frame, color, model_type='visual'):
 
@@ -664,6 +805,16 @@ class URDFViewer(QMainWindow):
         vtk_transform.SetMatrix(transform_matrix.flatten())
         actor.SetUserTransform(vtk_transform)
 
+    def _create_parser(self):
+        """Create the appropriate parser based on the current file type.
+
+        Returns URDFParser for URDF files, MJCFParser for MJCF files.
+        """
+        if self.current_parser_type == 'mjcf':
+            return MJCFParser(self.current_urdf_file)
+        else:
+            return URDFParser(self.current_urdf_file)
+
     def clear_models(self):
         """Clear all models from the scene"""
         # Remove all actors from the renderer
@@ -725,6 +876,7 @@ class URDFViewer(QMainWindow):
         # Reset selected chain and current URDF file
         self.selected_chain = None
         self.current_urdf_file = None
+        self.current_parser_type = None
 
         # Update current file label
         self.update_current_file_label()
@@ -882,9 +1034,17 @@ class URDFViewer(QMainWindow):
         for text_actor in self.mdh_text_actors:
             self.renderer.RemoveActor(text_actor)
         self.mdh_text_actors = []
-        
+
+        # MDH frames only work for URDF files (requires get_chain_info and get_mdh_frames)
+        if self.current_parser_type != 'urdf':
+            QMessageBox.warning(
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("mdh_urdf_only")
+            )
+            return
+
         # Create a fresh parser instance to ensure we get the latest data
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         
         # Get chain information to ensure we have the latest chain data
         chains, _ = parser.get_chain_info()
@@ -1046,8 +1206,16 @@ class URDFViewer(QMainWindow):
             )
             return
 
+        # MDH parameters only work for URDF files
+        if self.current_parser_type != 'urdf':
+            QMessageBox.warning(
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("mdh_urdf_only")
+            )
+            return
+
         # Create a fresh parser instance to ensure we get the latest MDH parameters
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
 
         # Get chain information to ensure we have the latest chain data
         chains, _ = parser.get_chain_info()
@@ -1330,9 +1498,9 @@ class URDFViewer(QMainWindow):
         """Update the model visualization with current joint angles"""
         if not self.current_urdf_file:
             return
-        
+
         # Create a fresh parser instance
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         
         # Get updated robot info with joint angles
         (link_names,
@@ -1646,7 +1814,7 @@ class URDFViewer(QMainWindow):
         if not self.current_urdf_file:
             return
 
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         result = parser.get_robot_info(qs=self.joint_values)
         # result has 14 values: link_names, link_mesh_files, link_mesh_transformations, link_frames, link_colors,
         #                         joint_names, joint_frames, joint_types, joint_axes, joint_parent_links, joint_child_links,
@@ -1744,7 +1912,7 @@ class URDFViewer(QMainWindow):
         if not self.current_urdf_file:
             return
 
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
 
         for link_name, link_frame in zip(link_names, link_frames):
@@ -1998,7 +2166,7 @@ class URDFViewer(QMainWindow):
         if not self.current_urdf_file:
             return
 
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
 
         for link_name, link_frame in zip(link_names, link_frames):

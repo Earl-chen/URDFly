@@ -98,7 +98,12 @@ TRANSLATIONS = {
     # === 对话框 ===
     "dialog_open_urdf": {"zh_CN": "打开 URDF 文件", "en": "Open URDF File"},
     "dialog_urdf_filter": {"zh_CN": "URDF 文件 (*.urdf)", "en": "URDF Files (*.urdf)"},
+    "dialog_open_robot": {"zh_CN": "打开机器人文件", "en": "Open Robot File"},
+    "dialog_robot_filter": {"zh_CN": "机器人文件 (*.urdf *.xml);;URDF 文件 (*.urdf);;MJCF 文件 (*.xml)", "en": "Robot Files (*.urdf *.xml);;URDF Files (*.urdf);;MJCF Files (*.xml)"},
     "load_urdf_failed": {"zh_CN": "加载 URDF 文件失败: {}", "en": "Failed to load URDF file: {}"},
+    "load_mjcf_failed": {"zh_CN": "加载 MJCF 文件失败: {}", "en": "Failed to load MJCF file: {}"},
+    "invalid_mjcf_file": {"zh_CN": "无效的 MuJoCo MJCF 文件（XML 文件必须包含 <mujoco> 根元素）", "en": "Invalid MuJoCo MJCF file (XML file must contain <mujoco> root element)"},
+    "mdh_urdf_only": {"zh_CN": "MDH 参数功能仅支持 URDF 文件", "en": "MDH parameters are only supported for URDF files"},
     "load_model_failed_pattern": {"zh_CN": "加载模型 {} 失败: {}", "en": "Failed to load model {}: {}"},
     "update_model_failed": {"zh_CN": "从 XML 更新模型失败: {}", "en": "Failed to update model from XML: {}"},
 
