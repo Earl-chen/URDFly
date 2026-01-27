@@ -1805,11 +1805,194 @@ class URDFViewer(QMainWindow):
                 'frame': T_world
             })
 
-    # === 新增：创建惯量盒可视化 ===
+    # === 惯性张量特征值分解（Jacobi 迭代法） ===
+    # 借鉴 robot_viewer 的 MathUtils.computeEigenDecomposition3x3
+    @staticmethod
+    def compute_eigen_decomposition_3x3(matrix_3x3):
+        """对 3x3 对称矩阵进行特征值分解（Jacobi 迭代法）
+        Args:
+            matrix_3x3: 3x3 numpy 对称矩阵
+        Returns:
+            eigenvalues: [λ1, λ2, λ3]
+            eigenvectors: 3x3 矩阵，列向量为特征向量
+        """
+        a00, a01, a02 = matrix_3x3[0, 0], matrix_3x3[0, 1], matrix_3x3[0, 2]
+        a11, a12 = matrix_3x3[1, 1], matrix_3x3[1, 2]
+        a22 = matrix_3x3[2, 2]
+
+        # 特征向量矩阵初始化为单位矩阵
+        v = np.eye(3)
+
+        max_iterations = 50
+        for _ in range(max_iterations):
+            # 找最大的非对角元素
+            abs_01 = abs(a01)
+            abs_02 = abs(a02)
+            abs_12 = abs(a12)
+            max_val = abs_01
+            p, q = 0, 1
+
+            if abs_02 > max_val:
+                max_val = abs_02
+                p, q = 0, 2
+            if abs_12 > max_val:
+                max_val = abs_12
+                p, q = 1, 2
+
+            # 收敛判断
+            if max_val < 1e-10:
+                break
+
+            # 计算旋转角度
+            if p == 0 and q == 1:
+                apq, app, aqq = a01, a00, a11
+            elif p == 0 and q == 2:
+                apq, app, aqq = a02, a00, a22
+            else:
+                apq, app, aqq = a12, a11, a22
+
+            tau = (aqq - app) / (2.0 * apq)
+            t = math.copysign(1.0, tau) / (abs(tau) + math.sqrt(1.0 + tau * tau))
+            c = 1.0 / math.sqrt(1.0 + t * t)
+            s = t * c
+
+            # 更新矩阵元素和特征向量
+            if p == 0 and q == 1:
+                t00, t01, t02 = a00, a01, a02
+                t11, t12 = a11, a12
+                a00 = c*c*t00 - 2*c*s*t01 + s*s*t11
+                a11 = s*s*t00 + 2*c*s*t01 + c*c*t11
+                a01 = 0.0
+                a02 = c*t02 - s*t12
+                a12 = s*t02 + c*t12
+                # 更新特征向量（列 0 和列 1）
+                for row in range(3):
+                    tv0 = v[row, 0]
+                    tv1 = v[row, 1]
+                    v[row, 0] = c * tv0 - s * tv1
+                    v[row, 1] = s * tv0 + c * tv1
+
+            elif p == 0 and q == 2:
+                t00, t01, t02 = a00, a01, a02
+                t12, t22 = a12, a22
+                a00 = c*c*t00 - 2*c*s*t02 + s*s*t22
+                a22 = s*s*t00 + 2*c*s*t02 + c*c*t22
+                a02 = 0.0
+                a01 = c*t01 - s*t12
+                a12 = s*t01 + c*t12
+                # 更新特征向量（列 0 和列 2）
+                for row in range(3):
+                    tv0 = v[row, 0]
+                    tv2 = v[row, 2]
+                    v[row, 0] = c * tv0 - s * tv2
+                    v[row, 2] = s * tv0 + c * tv2
+
+            else:  # p == 1, q == 2
+                t11, t01, t12 = a11, a01, a12
+                t02, t22 = a02, a22
+                a11 = c*c*t11 - 2*c*s*t12 + s*s*t22
+                a22 = s*s*t11 + 2*c*s*t12 + c*c*t22
+                a12 = 0.0
+                a01 = c*t01 - s*t02
+                a02 = s*t01 + c*t02
+                # 更新特征向量（列 1 和列 2）
+                for row in range(3):
+                    tv1 = v[row, 1]
+                    tv2 = v[row, 2]
+                    v[row, 1] = c * tv1 - s * tv2
+                    v[row, 2] = s * tv1 + c * tv2
+
+        return [a00, a11, a22], v
+
+    # === 计算惯量盒参数（借鉴 robot_viewer 的 MathUtils.computeInertiaBox） ===
+    @staticmethod
+    def compute_inertia_box(inertia, mass):
+        """根据惯性张量计算等效长方体的尺寸和主轴旋转
+        Args:
+            inertia: dict，包含 ixx, ixy, ixz, iyy, iyz, izz
+            mass: 质量
+        Returns:
+            dict {box_x, box_y, box_z, R_principal} 或 None（参数不合理时）
+        """
+        Ixx = inertia.get('ixx', 0)
+        Iyy = inertia.get('iyy', 0)
+        Izz = inertia.get('izz', 0)
+        Ixy = inertia.get('ixy', 0)
+        Ixz = inertia.get('ixz', 0)
+        Iyz = inertia.get('iyz', 0)
+
+        # 合理性检查1：质量太小
+        min_mass_threshold = 0.01  # 10g
+        if mass < min_mass_threshold:
+            avg_inertia = (abs(Ixx) + abs(Iyy) + abs(Izz)) / 3.0
+            if avg_inertia > 0:
+                inertia_radius = math.sqrt(avg_inertia / mass)
+                if inertia_radius > 0.05:
+                    return None
+
+        # 合理性检查2：所有惯量值接近零
+        inertia_threshold = 1e-9
+        if abs(Ixx) < inertia_threshold and abs(Iyy) < inertia_threshold and abs(Izz) < inertia_threshold:
+            return None
+
+        # 检查是否有非对角分量
+        has_off_diagonal = abs(Ixy) > 1e-10 or abs(Ixz) > 1e-10 or abs(Iyz) > 1e-10
+
+        R_principal = np.eye(3)  # 默认无旋转
+
+        if has_off_diagonal:
+            # 有非对角分量，需要特征值分解
+            inertia_matrix = np.array([
+                [Ixx, Ixy, Ixz],
+                [Ixy, Iyy, Iyz],
+                [Ixz, Iyz, Izz]
+            ])
+            principal_inertias, eigenvectors = URDFViewer.compute_eigen_decomposition_3x3(inertia_matrix)
+            R_principal = eigenvectors  # 特征向量矩阵即为主轴旋转
+        else:
+            # 无非对角分量，直接使用对角值
+            principal_inertias = [Ixx, Iyy, Izz]
+
+        # 反推长方体尺寸
+        factor = 6.0 / mass
+        width_sq = factor * (principal_inertias[1] + principal_inertias[2] - principal_inertias[0])
+        height_sq = factor * (principal_inertias[0] + principal_inertias[2] - principal_inertias[1])
+        depth_sq = factor * (principal_inertias[0] + principal_inertias[1] - principal_inertias[2])
+
+        box_x = math.sqrt(abs(width_sq))
+        box_y = math.sqrt(abs(height_sq))
+        box_z = math.sqrt(abs(depth_sq))
+
+        # 合理性检查3：惯量半径与盒子尺寸比例
+        avg_inertia = (abs(principal_inertias[0]) + abs(principal_inertias[1]) + abs(principal_inertias[2])) / 3.0
+        inertia_radius = math.sqrt(avg_inertia / mass) if mass > 0 else 0
+        avg_box_size = (box_x + box_y + box_z) / 3.0
+        if avg_box_size > 0 and inertia_radius > avg_box_size:
+            return None
+
+        # 合理性检查4：等效密度
+        volume = box_x * box_y * box_z
+        if volume > 0:
+            equivalent_density = mass / volume
+            if equivalent_density < 0.0001:  # 比气凝胶轻100倍
+                return None
+
+        # 最小尺寸限制
+        min_size = 0.01
+        box_x = max(box_x, min_size)
+        box_y = max(box_y, min_size)
+        box_z = max(box_z, min_size)
+
+        return {
+            'box_x': box_x,
+            'box_y': box_y,
+            'box_z': box_z,
+            'R_principal': R_principal  # 主轴旋转矩阵 (3x3)
+        }
+
+    # === 创建惯量盒可视化 ===
     # 为每个有惯量信息的连杆创建一个长方体表示其等效惯量
-    # 长方体的尺寸根据 URDF 中的惯性张量计算得出（使用 Gazebo 相同的公式）
-    # Ixx = m/12 * (h² + d²), Iyy = m/12 * (w² + d²), Izz = m/12 * (w² + h²)
-    # 反推得：w² = (6/m) * (Iyy + Izz - Ixx), h² = (6/m) * (Ixx + Izz - Iyy), d² = (6/m) * (Ixx + Iyy - Izz)
+    # 支持非对角惯性张量的主轴分解（借鉴 robot_viewer 方案）
     def create_inertia_boxes(self):
         """Create inertia box visualization for all links"""
         if not self.current_urdf_file:
@@ -1834,52 +2017,26 @@ class URDFViewer(QMainWindow):
             if mass <= 0:
                 continue
 
-            # Calculate inertia box dimensions from principal moments of inertia
-            # For a uniformly dense rectangular box:
-            # Ixx = m/12 * (h^2 + d^2)  (around x-axis)
-            # Iyy = m/12 * (w^2 + d^2)  (around y-axis)
-            # Izz = m/12 * (w^2 + h^2)  (around z-axis)
-            # where w=width(x), h=height(y), d=depth(z)
-            #
-            # Solving for dimensions:
-            # w^2 = (6/m) * (Iyy + Izz - Ixx)
-            # h^2 = (6/m) * (Ixx + Izz - Iyy)
-            # d^2 = (6/m) * (Ixx + Iyy - Izz)
+            # 计算惯量盒参数（包括主轴分解）
+            box_data = self.compute_inertia_box(inertia, mass)
+            if box_data is None:
+                print(f"[INERTIA] Link: {link_name} - 惯量参数不合理，跳过显示")
+                continue
 
-            ixx = max(inertia.get('ixx', 0), 1e-9)
-            iyy = max(inertia.get('iyy', 0), 1e-9)
-            izz = max(inertia.get('izz', 0), 1e-9)
+            box_x = box_data['box_x']
+            box_y = box_data['box_y']
+            box_z = box_data['box_z']
+            R_principal = box_data['R_principal']
 
-            factor = 6.0 / mass
-
-            # Calculate box dimensions (can be imaginary if inconsistent inertia)
-            width_sq = factor * (iyy + izz - ixx)
-            height_sq = factor * (ixx + izz - iyy)
-            depth_sq = factor * (ixx + iyy - izz)
-
-            # Use absolute value and ensure minimum size
-            box_x = max(0.01, math.sqrt(max(0, width_sq)))
-            box_y = max(0.01, math.sqrt(max(0, height_sq)))
-            box_z = max(0.01, math.sqrt(max(0, depth_sq)))
-
-            # Debug print: show inertia values and computed box dimensions
+            # Debug print
             print(f"[INERTIA] Link: {link_name}")
             print(f"  Mass: {mass:.4f} kg")
-            print(f"  Original inertia: Ixx={ixx:.6f}, Iyy={iyy:.6f}, Izz={izz:.6f}")
+            print(f"  Inertia: Ixx={inertia.get('ixx',0):.6f}, Iyy={inertia.get('iyy',0):.6f}, Izz={inertia.get('izz',0):.6f}")
+            print(f"  Off-diag: Ixy={inertia.get('ixy',0):.6f}, Ixz={inertia.get('ixz',0):.6f}, Iyz={inertia.get('iyz',0):.6f}")
             print(f"  Computed box: w={box_x:.4f}m, h={box_y:.4f}m, d={box_z:.4f}m")
-
-            # Verify: recalculate inertia from box dimensions
-            Ixx_verify = mass / 12.0 * (box_y**2 + box_z**2)
-            Iyy_verify = mass / 12.0 * (box_x**2 + box_z**2)
-            Izz_verify = mass / 12.0 * (box_x**2 + box_y**2)
-
-            # Calculate errors
-            err_xx = abs(Ixx_verify - ixx) / max(ixx, 1e-9) * 100
-            err_yy = abs(Iyy_verify - iyy) / max(iyy, 1e-9) * 100
-            err_zz = abs(Izz_verify - izz) / max(izz, 1e-9) * 100
-
-            print(f"  Verified inertia: Ixx={Ixx_verify:.6f}, Iyy={Iyy_verify:.6f}, Izz={Izz_verify:.6f}")
-            print(f"  Errors: Ixx={err_xx:.2f}%, Iyy={err_yy:.2f}%, Izz={err_zz:.2f}%")
+            has_rotation = not np.allclose(R_principal, np.eye(3))
+            if has_rotation:
+                print(f"  Principal axis rotation applied")
 
             # Create box
             cube = vtk.vtkCubeSource()
@@ -1901,9 +2058,16 @@ class URDFViewer(QMainWindow):
             com_xyz = np.array(com_origin.get('xyz', [0, 0, 0]))
             com_rpy = np.array(com_origin.get('rpy', [0, 0, 0]))
 
-            # Calculate transform
+            # 计算变换：link_frame @ T_com @ R_principal
+            # T_com: 质心相对于连杆坐标系的位姿
+            # R_principal: 主惯性轴旋转（将长方体对齐到主惯性轴方向）
             T_com = self.compute_transformation(com_rpy, com_xyz)
-            T_world = link_frame @ T_com
+
+            # 构建主轴旋转的 4x4 齐次矩阵
+            T_principal = np.eye(4)
+            T_principal[:3, :3] = R_principal
+
+            T_world = link_frame @ T_com @ T_principal
 
             vtk_transform = vtk.vtkTransform()
             vtk_transform.SetMatrix(T_world.flatten())
@@ -1913,11 +2077,13 @@ class URDFViewer(QMainWindow):
             self.renderer.AddActor(actor)
             self.inertia_actors.append(actor)
 
-            # Store inertia actor info for updates (T_com is relative to link frame)
+            # Store inertia actor info for updates
+            # T_com_rel 现在包含主轴旋转
+            T_com_with_principal = T_com @ T_principal
             self.inertia_actor_info.append({
                 'actor': actor,
                 'link_name': link_name,
-                'T_com_rel': T_com  # COM transform relative to link frame
+                'T_com_rel': T_com_with_principal  # 包含主轴旋转的相对变换
             })
 
     def compute_transformation(self, rpy, xyz):
