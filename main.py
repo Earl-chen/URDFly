@@ -272,14 +272,6 @@ class URDFViewer(QMainWindow):
                 self.control_panel.set_mdh_frames_checked(False)
                 return
 
-            if not self.scene.is_urdf():
-                QMessageBox.warning(
-                    self, self.translation_manager.tr("warning"),
-                    self.translation_manager.tr("mdh_urdf_only")
-                )
-                self.control_panel.set_mdh_frames_checked(False)
-                return
-
             if not self.scene.selected_chain:
                 QMessageBox.warning(
                     self, self.translation_manager.tr("warning"),
@@ -469,13 +461,6 @@ class URDFViewer(QMainWindow):
             QMessageBox.warning(
                 self, self.translation_manager.tr("warning"),
                 self.translation_manager.tr("load_urdf_show_mdh")
-            )
-            return
-
-        if not self.scene.is_urdf():
-            QMessageBox.warning(
-                self, self.translation_manager.tr("warning"),
-                self.translation_manager.tr("mdh_urdf_only")
             )
             return
 

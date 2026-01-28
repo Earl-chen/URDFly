@@ -210,8 +210,8 @@ class SceneManager:
             # 初始化关节值
             self.joint_values = [0.0] * len(self.revolute_joints)
 
-            # MJCF 没有相同的运动链结构
-            self.chains = []
+            # 获取运动链信息 (MJCF 也支持)
+            self.chains, _ = parser.get_chain_info()
 
             # 获取视觉几何体信息
             visual_geometries = parser.get_visual_geometries()
@@ -379,7 +379,7 @@ class SceneManager:
 
     def update_mdh_frames(self):
         """更新 MDH 坐标系"""
-        if self.current_parser_type != 'urdf' or not self.selected_chain:
+        if not self.selected_chain:
             return
 
         parser = self._create_parser()
