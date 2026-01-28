@@ -130,6 +130,17 @@ TRANSLATIONS = {
     "select_chain_mdh_warning": {"zh_CN": "请先选择一个运动链以查看 MDH 参数。", "en": "Please select a kinematic chain to view MDH parameters."},
     "load_urdf_show_mdh": {"zh_CN": "请先加载 URDF 文件。[显示 MDH]", "en": "Please load a URDF file first [Show MDH]"},
     "no_collision_meshes": {"zh_CN": "没有可用的碰撞网格。请先加载 URDF 文件。", "en": "No collision meshes available. Please load a URDF file first."},
+
+    # === 拓扑图 ===
+    "show_topology": {"zh_CN": "显示拓扑图", "en": "Show Topology"},
+    "topology_title": {"zh_CN": "机器人拓扑图", "en": "Robot Topology"},
+    "fit_view": {"zh_CN": "适应窗口", "en": "Fit View"},
+    "export_png": {"zh_CN": "导出 PNG", "en": "Export PNG"},
+    "export_svg": {"zh_CN": "导出 SVG", "en": "Export SVG"},
+    "export_success": {"zh_CN": "已导出到: {}", "en": "Exported to: {}"},
+    "export_failed": {"zh_CN": "导出失败。", "en": "Export failed."},
+    "export_empty_scene": {"zh_CN": "场景为空，无法导出。", "en": "Scene is empty, cannot export."},
+    "load_urdf_topology": {"zh_CN": "请先加载 URDF 文件。[拓扑图]", "en": "Please load a URDF file first [Topology]"},
 }
 
 

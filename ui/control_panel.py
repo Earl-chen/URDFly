@@ -34,6 +34,7 @@ class ControlPanel(QWidget):
     show_mdh_requested = pyqtSignal()
     decompose_requested = pyqtSignal()
     set_joints_requested = pyqtSignal()
+    show_topology_requested = pyqtSignal()
 
     visual_toggled = pyqtSignal(bool)
     collision_toggled = pyqtSignal(bool)
@@ -108,6 +109,10 @@ class ControlPanel(QWidget):
         self.btn_set_joints = QPushButton(self.tr_mgr.tr("set_joints"))
         self.btn_set_joints.clicked.connect(self.set_joints_requested.emit)
         layout.addWidget(self.btn_set_joints)
+
+        self.btn_topology = QPushButton(self.tr_mgr.tr("show_topology"))
+        self.btn_topology.clicked.connect(self.show_topology_requested.emit)
+        layout.addWidget(self.btn_topology)
 
         # 透明度控制
         transparency_group = QGroupBox("")
@@ -276,6 +281,7 @@ class ControlPanel(QWidget):
         self.btn_mdh.setText(self.tr_mgr.tr("show_mdh"))
         self.btn_decomp.setText(self.tr_mgr.tr("decompose_collision"))
         self.btn_set_joints.setText(self.tr_mgr.tr("set_joints"))
+        self.btn_topology.setText(self.tr_mgr.tr("show_topology"))
         self.transparency_label.setText(self.tr_mgr.tr("transparency"))
         self.visibility_group.setTitle(self.tr_mgr.tr("visibility_settings"))
         self.cb_visual.setText(self.tr_mgr.tr("show_visual"))

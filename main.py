@@ -141,6 +141,7 @@ class URDFViewer(QMainWindow):
         self.control_panel.show_mdh_requested.connect(self.show_mdh_parameters)
         self.control_panel.decompose_requested.connect(self.decompose_collision_meshes)
         self.control_panel.set_joints_requested.connect(self.open_set_joints_dialog)
+        self.control_panel.show_topology_requested.connect(self.show_topology_graph)
 
         self.control_panel.visual_toggled.connect(self.on_visual_toggled)
         self.control_panel.collision_toggled.connect(self.on_collision_toggled)
@@ -512,6 +513,22 @@ class URDFViewer(QMainWindow):
 
         btn_apply.clicked.connect(parse_and_apply)
         btn_cancel.clicked.connect(dialog.reject)
+        dialog.exec_()
+
+    # === 拓扑图 ===
+
+    def show_topology_graph(self):
+        """显示拓扑图"""
+        if not self.scene.current_file:
+            QMessageBox.warning(
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("load_urdf_topology")
+            )
+            return
+
+        from topology_dialog import TopologyDialog
+        parser = self.scene.get_parser()
+        dialog = TopologyDialog(self, parser, self.translation_manager)
         dialog.exec_()
 
     # === MDH 参数 ===
