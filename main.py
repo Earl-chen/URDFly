@@ -1807,35 +1807,30 @@ class URDFViewer(QMainWindow):
                     model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
 
         # === 新增：更新碰撞体 ===
-        # 建立从连杆名称到碰撞体变换的映射，然后更新每个碰撞体的位置和方向
-        # Build a map from link name to collision transform
-        collision_transform_map = {}
-        for i, link_name in enumerate(collision_link_names):
-            collision_transform_map[link_name] = collision_mesh_transformations[i]
-
+        # 直接使用索引更新每个碰撞体的位置和方向
+        # 不使用 link_name 映射，因为一个 body 可能有多个 geom
         for i, model in enumerate(self.models_collision):
             # Extract link index from model name (format: "collision_{i}")
             if model.name.startswith("collision_"):
                 collision_idx = int(model.name.split("_")[1])
-                if collision_idx < len(collision_link_names):
-                    link_name = collision_link_names[collision_idx]
-                    if link_name in collision_transform_map:
-                        # Update mesh transformation
-                        model.apply_transform(collision_transform_map[link_name])
+                if collision_idx < len(collision_mesh_transformations):
+                    transform = collision_mesh_transformations[collision_idx]
+                    # Update mesh transformation
+                    model.apply_transform(transform)
 
-                        # Update axes and text actors
-                        if model.axes_actor:
-                            vtk_transform = vtk.vtkTransform()
-                            vtk_transform.SetMatrix(collision_transform_map[link_name].flatten())
-                            model.axes_actor.SetUserTransform(vtk_transform)
+                    # Update axes and text actors
+                    if model.axes_actor:
+                        vtk_transform = vtk.vtkTransform()
+                        vtk_transform.SetMatrix(transform.flatten())
+                        model.axes_actor.SetUserTransform(vtk_transform)
 
-                        if model.text_actor:
-                            # Update text position based on new frame
-                            z_endpoint = [0, 0, 0.05, 1]
-                            vtk_transform = vtk.vtkTransform()
-                            vtk_transform.SetMatrix(collision_transform_map[link_name].flatten())
-                            transformed_point = vtk_transform.TransformPoint(z_endpoint[0], z_endpoint[1], z_endpoint[2])
-                            model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
+                    if model.text_actor:
+                        # Update text position based on new frame
+                        z_endpoint = [0, 0, 0.05, 1]
+                        vtk_transform = vtk.vtkTransform()
+                        vtk_transform.SetMatrix(transform.flatten())
+                        transformed_point = vtk_transform.TransformPoint(z_endpoint[0], z_endpoint[1], z_endpoint[2])
+                        model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
 
         # === 新增：更新关节轴 ===
         # 根据新的关节位置和旋转，更新关节轴圆柱体的位置和方向
@@ -2180,7 +2175,15 @@ class URDFViewer(QMainWindow):
         parser = self._create_parser()
         link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
 
+        # Track processed links to avoid duplicates (for MJCF with multiple geoms per body)
+        processed_links = set()
+
         for link_name, link_frame in zip(link_names, link_frames):
+            # Skip if already processed (handles multiple geoms per body)
+            if link_name in processed_links:
+                continue
+            processed_links.add(link_name)
+
             # Get inertial data from parser
             link_info = parser.links.get(link_name)
             if link_info is None or link_info.get('inertial') is None:
@@ -2434,7 +2437,15 @@ class URDFViewer(QMainWindow):
         parser = self._create_parser()
         link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
 
+        # Track processed links to avoid duplicates (for MJCF with multiple geoms per body)
+        processed_links = set()
+
         for link_name, link_frame in zip(link_names, link_frames):
+            # Skip if already processed (handles multiple geoms per body)
+            if link_name in processed_links:
+                continue
+            processed_links.add(link_name)
+
             # Get inertial data from parser
             link_info = parser.links.get(link_name)
             if link_info is None or link_info.get('inertial') is None:
