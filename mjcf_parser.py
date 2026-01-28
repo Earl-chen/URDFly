@@ -451,6 +451,11 @@ class MJCFParser:
         # Process each geom (not body) for visual geometry
         # This properly handles multiple geoms per body
         for g in range(self.model.ngeom):
+            # 跳过碰撞几何体 - 只处理视觉几何体 (contype=0 表示不参与碰撞)
+            contype = self.model.geom_contype[g]
+            if contype != 0:
+                continue  # 这是碰撞几何体，跳过
+
             body_id = self.model.geom_bodyid[g]
             body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, body_id)
             if body_name is None:
