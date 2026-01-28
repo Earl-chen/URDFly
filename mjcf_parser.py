@@ -479,23 +479,29 @@ class MJCFParser:
             size = self.model.geom_size[g].tolist()
 
             if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
-                # Mesh geometry
+                # Mesh geometry - use BODY transform, not geom transform!
+                # MuJoCo's geom_xpos/xmat represents the mesh's geometric center,
+                # but the mesh file vertices are relative to the body origin.
                 mesh_id = self.model.geom_dataid[g]
                 if mesh_id >= 0:
                     mesh_file = self._get_mesh_file(mesh_id)
                 else:
                     mesh_file = None
                 self._visual_geometries.append(None)
+                # Use T_body for mesh transformation
+                link_mesh_transformations.append(T_body)
             elif geom_type in (mujoco.mjtGeom.mjGEOM_BOX, mujoco.mjtGeom.mjGEOM_SPHERE,
                                mujoco.mjtGeom.mjGEOM_CYLINDER, mujoco.mjtGeom.mjGEOM_CAPSULE,
                                mujoco.mjtGeom.mjGEOM_ELLIPSOID):
-                # Primitive geometry
+                # Primitive geometry - use geom transform (center is at geom_xpos)
                 mesh_file = None
                 type_name = self._geom_type_name(geom_type)
                 self._visual_geometries.append({
                     'type': type_name,
                     'size': size,
                 })
+                # Use T_geom for primitive geometry transformation
+                link_mesh_transformations.append(T_geom)
             elif geom_type == mujoco.mjtGeom.mjGEOM_PLANE:
                 # Skip ground plane for visual
                 continue
@@ -507,10 +513,10 @@ class MJCFParser:
                 mesh_file = None
                 color = None
                 self._visual_geometries.append(None)
+                link_mesh_transformations.append(T_body)
 
             link_names.append(body_name)
             link_mesh_files.append(mesh_file)
-            link_mesh_transformations.append(T_geom)
             link_frames.append(T_body)
             link_colors.append(color)
 
@@ -535,17 +541,27 @@ class MJCFParser:
             T_geom[:3, :3] = geom_mat
             T_geom[:3, 3] = geom_pos
 
+            # Get body world transformation
+            body_pos = self.data.xpos[body_id]
+            body_mat = self.data.xmat[body_id].reshape(3, 3)
+
+            T_body = np.eye(4)
+            T_body[:3, :3] = body_mat
+            T_body[:3, 3] = body_pos
+
             size = self.model.geom_size[g].tolist()
 
             if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
+                # Mesh collision - use body transform
                 mesh_id = self.model.geom_dataid[g]
                 if mesh_id >= 0:
                     mesh_file = self._get_mesh_file(mesh_id)
                     collision_mesh_files.append(mesh_file)
-                    collision_mesh_transformations.append(T_geom)
+                    collision_mesh_transformations.append(T_body)  # Use T_body for mesh
                     collision_link_names.append(body_name)
                     collision_geometries.append({'type': 'mesh', 'file': mesh_file})
             elif geom_type == mujoco.mjtGeom.mjGEOM_BOX:
+                # Primitive - use geom transform
                 collision_mesh_files.append(None)
                 collision_mesh_transformations.append(T_geom)
                 collision_link_names.append(body_name)

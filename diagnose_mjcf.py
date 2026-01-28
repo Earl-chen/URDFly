@@ -36,9 +36,13 @@ def diagnose_geom_transforms(mjcf_file):
 
     # 新的验证逻辑：由于现在是每个 geom 一个条目，
     # 需要跳过 PLANE 和 HFIELD 类型的 geom 来对应
+    # 注意：对于 mesh 类型，我们使用 body transform（因为 mesh 顶点相对于 body 原点）
+    #       对于 primitive 类型，我们使用 geom transform（因为几何体中心在 geom_xpos）
     geom_idx = 0
     entry_idx = 0
     all_correct = True
+    mesh_count = 0
+    primitive_count = 0
 
     while geom_idx < model.ngeom and entry_idx < len(link_names):
         geom_type = model.geom_type[geom_idx]
@@ -52,21 +56,33 @@ def diagnose_geom_transforms(mjcf_file):
         if geom_name is None:
             geom_name = f"geom_{geom_idx}"
 
-        # MuJoCo 计算的正确位置
-        geom_world_pos_mj = data.geom_xpos[geom_idx]
-        geom_world_mat_mj = data.geom_xmat[geom_idx].reshape(3, 3)
+        body_id = model.geom_bodyid[geom_idx]
 
         # 我们的计算结果
         T_computed = link_mesh_transformations[entry_idx]
         computed_pos = T_computed[:3, 3]
         computed_mat = T_computed[:3, :3]
 
-        pos_error = np.linalg.norm(geom_world_pos_mj - computed_pos)
-        rot_error = np.linalg.norm(geom_world_mat_mj - computed_mat)
+        if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
+            # Mesh 类型：应该使用 body transform
+            # 因为 mesh 文件的顶点是相对于 body 原点定义的
+            expected_pos = data.xpos[body_id]
+            expected_mat = data.xmat[body_id].reshape(3, 3)
+            mesh_count += 1
+        else:
+            # Primitive 类型：应该使用 geom transform
+            # 因为几何体中心在 geom_xpos
+            expected_pos = data.geom_xpos[geom_idx]
+            expected_mat = data.geom_xmat[geom_idx].reshape(3, 3)
+            primitive_count += 1
+
+        pos_error = np.linalg.norm(expected_pos - computed_pos)
+        rot_error = np.linalg.norm(expected_mat - computed_mat)
 
         if pos_error > 0.001 or rot_error > 0.001:
-            print(f"\n⚠ Geom {geom_idx} ({geom_name}):")
-            print(f"    MuJoCo 位置: {geom_world_pos_mj}")
+            type_str = "mesh" if geom_type == mujoco.mjtGeom.mjGEOM_MESH else "primitive"
+            print(f"\n⚠ Geom {geom_idx} ({geom_name}, {type_str}):")
+            print(f"    期望位置:    {expected_pos}")
             print(f"    计算位置:    {computed_pos}")
             print(f"    位置误差: {pos_error:.6f}, 旋转误差: {rot_error:.6f}")
             all_correct = False
@@ -74,18 +90,21 @@ def diagnose_geom_transforms(mjcf_file):
         geom_idx += 1
         entry_idx += 1
 
+    print(f"\n统计: {mesh_count} 个 mesh, {primitive_count} 个 primitive")
     if all_correct:
-        print("\n✓ 所有视觉几何体变换正确!")
+        print("✓ 所有视觉几何体变换正确!")
     else:
-        print(f"\n共检测到误差")
+        print("✗ 检测到变换误差")
 
     print("\n[2] 验证碰撞几何体变换:")
     print("-" * 60)
 
-    # 同样的验证逻辑
+    # 同样的验证逻辑，区分 mesh 和 primitive
     geom_idx = 0
     coll_idx = 0
     all_coll_correct = True
+    coll_mesh_count = 0
+    coll_primitive_count = 0
 
     while geom_idx < model.ngeom and coll_idx < len(collision_geometries):
         geom_type = model.geom_type[geom_idx]
@@ -99,19 +118,30 @@ def diagnose_geom_transforms(mjcf_file):
         if geom_name is None:
             geom_name = f"geom_{geom_idx}"
 
-        geom_world_pos_mj = data.geom_xpos[geom_idx]
-        geom_world_mat_mj = data.geom_xmat[geom_idx].reshape(3, 3)
+        body_id = model.geom_bodyid[geom_idx]
 
         T_computed = collision_mesh_transformations[coll_idx]
         computed_pos = T_computed[:3, 3]
         computed_mat = T_computed[:3, :3]
 
-        pos_error = np.linalg.norm(geom_world_pos_mj - computed_pos)
-        rot_error = np.linalg.norm(geom_world_mat_mj - computed_mat)
+        if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
+            # Mesh 类型：应该使用 body transform
+            expected_pos = data.xpos[body_id]
+            expected_mat = data.xmat[body_id].reshape(3, 3)
+            coll_mesh_count += 1
+        else:
+            # Primitive 类型：应该使用 geom transform
+            expected_pos = data.geom_xpos[geom_idx]
+            expected_mat = data.geom_xmat[geom_idx].reshape(3, 3)
+            coll_primitive_count += 1
+
+        pos_error = np.linalg.norm(expected_pos - computed_pos)
+        rot_error = np.linalg.norm(expected_mat - computed_mat)
 
         if pos_error > 0.001 or rot_error > 0.001:
-            print(f"\n⚠ Collision {coll_idx} ({geom_name}):")
-            print(f"    MuJoCo 位置: {geom_world_pos_mj}")
+            type_str = "mesh" if geom_type == mujoco.mjtGeom.mjGEOM_MESH else "primitive"
+            print(f"\n⚠ Collision {coll_idx} ({geom_name}, {type_str}):")
+            print(f"    期望位置:    {expected_pos}")
             print(f"    计算位置:    {computed_pos}")
             print(f"    位置误差: {pos_error:.6f}, 旋转误差: {rot_error:.6f}")
             all_coll_correct = False
@@ -119,8 +149,9 @@ def diagnose_geom_transforms(mjcf_file):
         geom_idx += 1
         coll_idx += 1
 
+    print(f"\n统计: {coll_mesh_count} 个 mesh, {coll_primitive_count} 个 primitive")
     if all_coll_correct:
-        print("\n✓ 所有碰撞几何体变换正确!")
+        print("✓ 所有碰撞几何体变换正确!")
 
     print(f"\n{'='*60}")
     print("诊断完成")
