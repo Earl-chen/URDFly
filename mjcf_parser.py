@@ -527,6 +527,11 @@ class MJCFParser:
 
         # Process collision geometries (same approach - iterate over geoms)
         for g in range(self.model.ngeom):
+            # 只处理碰撞几何体 - 跳过视觉几何体 (contype=0 表示不参与碰撞)
+            contype = self.model.geom_contype[g]
+            if contype == 0:
+                continue  # 这是视觉几何体，跳过
+
             body_id = self.model.geom_bodyid[g]
             body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, body_id)
             if body_name is None:
