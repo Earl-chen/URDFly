@@ -343,13 +343,20 @@ class SceneManager:
 
         self.joint_values = joint_values
 
-        # 创建新的解析器获取更新后的变换
-        parser = self._create_parser()
-        robot_info = parser.get_robot_info(qs=joint_values)
+        # ✅ 使用缓存的解析器而非重新创建 (性能优化)
+        if self.parser is None:
+            self.parser = self._create_parser()
 
-        (link_names, _, link_mesh_transformations, link_frames, _,
-         joint_names, joint_frames, _, joint_axes, _, _, _,
-         _, collision_mesh_transformations, _, _) = robot_info
+        # ✅ 调用轻量级变换更新方法 (性能优化)
+        transforms = self.parser.update_transforms(joint_values)
+
+        link_names = transforms['link_names']
+        link_mesh_transformations = transforms['link_mesh_transformations']
+        link_frames = transforms['link_frames']
+        collision_mesh_transformations = transforms['collision_mesh_transformations']
+        joint_names = transforms['joint_names']
+        joint_frames = transforms['joint_frames']
+        joint_axes = transforms['joint_axes']
 
         # 更新视觉模型变换
         self.visualization.update_visual_transforms(

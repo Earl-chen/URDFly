@@ -33,6 +33,11 @@ class MJCFParser:
         self._parse_bodies()
         self._parse_joints()
 
+        # 缓存几何体索引分类，用于 update_transforms() 快速更新
+        self._visual_geom_indices = []  # (geom_idx, body_id, is_mesh)
+        self._collision_geom_indices = []  # (geom_idx, body_id, geom_type)
+        self._cache_geom_indices()
+
     def _parse_meshdir(self):
         """Parse the meshdir compiler option from the MJCF XML file."""
         try:
@@ -669,6 +674,178 @@ class MJCFParser:
         - A dict with 'type' and 'size' keys for primitive shapes
         """
         return getattr(self, '_visual_geometries', [])
+
+    def _cache_geom_indices(self):
+        """缓存几何体索引分类，用于 update_transforms() 快速更新"""
+        self._visual_geom_indices = []
+        self._collision_geom_indices = []
+
+        # 缓存视觉几何体索引
+        for g in range(self.model.ngeom):
+            contype = self.model.geom_contype[g]
+            if contype != 0:
+                continue  # 碰撞几何体，跳过
+
+            geom_type = self.model.geom_type[g]
+            if geom_type in (mujoco.mjtGeom.mjGEOM_PLANE, mujoco.mjtGeom.mjGEOM_HFIELD):
+                continue  # 跳过地面和高度场
+
+            body_id = self.model.geom_bodyid[g]
+            is_mesh = (geom_type == mujoco.mjtGeom.mjGEOM_MESH)
+            self._visual_geom_indices.append((g, body_id, is_mesh))
+
+        # 缓存碰撞几何体索引
+        for g in range(self.model.ngeom):
+            contype = self.model.geom_contype[g]
+            if contype == 0:
+                continue  # 视觉几何体，跳过
+
+            geom_type = self.model.geom_type[g]
+            if geom_type == mujoco.mjtGeom.mjGEOM_PLANE:
+                continue  # 跳过地面
+
+            body_id = self.model.geom_bodyid[g]
+            self._collision_geom_indices.append((g, body_id, geom_type))
+
+    def update_transforms(self, qs):
+        """轻量级变换更新 - 仅用于关节滑块交互
+
+        使用 mj_kinematics() 替代 mj_forward()，跳过动力学计算，
+        直接返回几何体变换矩阵，大幅提升性能。
+
+        Args:
+            qs: 关节角度值列表
+
+        Returns:
+            dict: 包含以下键的字典
+                - link_names: 连杆名称列表
+                - link_mesh_transformations: 视觉几何体变换矩阵列表
+                - link_frames: 连杆坐标系变换矩阵列表
+                - collision_mesh_transformations: 碰撞体变换矩阵列表
+                - joint_names: 关节名称列表
+                - joint_frames: 关节坐标系变换矩阵列表
+                - joint_axes: 关节轴列表
+        """
+        # 设置关节位置
+        if qs is not None:
+            rev_idx = 0
+            for i in range(self.model.njnt):
+                if self.model.jnt_type[i] == mujoco.mjtJoint.mjJNT_HINGE:
+                    if rev_idx < len(qs):
+                        qpos_addr = self.model.jnt_qposadr[i]
+                        self.data.qpos[qpos_addr] = qs[rev_idx]
+                        rev_idx += 1
+
+        # 只执行运动学计算 (不含动力学) - 核心优化点
+        mujoco.mj_kinematics(self.model, self.data)
+
+        # 快速提取视觉几何体变换
+        link_names = []
+        link_mesh_transformations = []
+        link_frames = []
+
+        for g, body_id, is_mesh in self._visual_geom_indices:
+            body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+            if body_name is None:
+                body_name = f"body_{body_id}"
+
+            # 获取 body 世界变换
+            body_pos = self.data.xpos[body_id]
+            body_mat = self.data.xmat[body_id].reshape(3, 3)
+
+            T_body = np.eye(4)
+            T_body[:3, :3] = body_mat
+            T_body[:3, 3] = body_pos
+
+            if is_mesh:
+                # Mesh 几何体使用 body 变换
+                link_mesh_transformations.append(T_body)
+            else:
+                # 基本几何体使用 geom 变换
+                geom_pos = self.data.geom_xpos[g]
+                geom_mat = self.data.geom_xmat[g].reshape(3, 3)
+
+                T_geom = np.eye(4)
+                T_geom[:3, :3] = geom_mat
+                T_geom[:3, 3] = geom_pos
+                link_mesh_transformations.append(T_geom)
+
+            link_names.append(body_name)
+            link_frames.append(T_body)
+
+        # 快速提取碰撞几何体变换
+        collision_mesh_transformations = []
+
+        for g, body_id, geom_type in self._collision_geom_indices:
+            if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
+                # Mesh 碰撞体使用 body 变换
+                body_pos = self.data.xpos[body_id]
+                body_mat = self.data.xmat[body_id].reshape(3, 3)
+
+                T_body = np.eye(4)
+                T_body[:3, :3] = body_mat
+                T_body[:3, 3] = body_pos
+                collision_mesh_transformations.append(T_body)
+            else:
+                # 基本几何体使用 geom 变换
+                geom_pos = self.data.geom_xpos[g]
+                geom_mat = self.data.geom_xmat[g].reshape(3, 3)
+
+                T_geom = np.eye(4)
+                T_geom[:3, :3] = geom_mat
+                T_geom[:3, 3] = geom_pos
+                collision_mesh_transformations.append(T_geom)
+
+        # 快速提取关节变换
+        joint_names = []
+        joint_frames = []
+        joint_axes = []
+
+        for joint in self.joints:
+            child_name = joint["child"]
+
+            # 找到子 body ID
+            child_body_id = None
+            for b in range(self.model.nbody):
+                bname = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, b)
+                if bname is None:
+                    bname = f"body_{b}"
+                if bname == child_name:
+                    child_body_id = b
+                    break
+
+            if child_body_id is not None:
+                body_pos = self.data.xpos[child_body_id]
+                body_mat = self.data.xmat[child_body_id].reshape(3, 3)
+
+                # 获取关节偏移
+                mj_jnt_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint["name"])
+                if mj_jnt_id >= 0:
+                    jnt_pos = self.model.jnt_pos[mj_jnt_id]
+                else:
+                    jnt_pos = np.zeros(3)
+
+                joint_world_pos = body_pos + body_mat @ jnt_pos
+
+                joint_frame = np.eye(4)
+                joint_frame[:3, :3] = body_mat
+                joint_frame[:3, 3] = joint_world_pos
+            else:
+                joint_frame = np.eye(4)
+
+            joint_names.append(joint["name"])
+            joint_frames.append(joint_frame)
+            joint_axes.append(joint["axis"])
+
+        return {
+            'link_names': link_names,
+            'link_mesh_transformations': link_mesh_transformations,
+            'link_frames': link_frames,
+            'collision_mesh_transformations': collision_mesh_transformations,
+            'joint_names': joint_names,
+            'joint_frames': joint_frames,
+            'joint_axes': joint_axes,
+        }
 
     @staticmethod
     def is_valid_mjcf(filepath):

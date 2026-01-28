@@ -489,6 +489,93 @@ class URDFParser:
             collision_link_names,  # Add collision link names
             collision_geometries,  # Add collision geometry types and parameters
         )
+
+    def update_transforms(self, qs):
+        """轻量级变换更新 - 仅用于关节滑块交互
+
+        复用 forward_kinematics() 计算变换矩阵，返回与 MJCFParser 相同格式的结果。
+
+        Args:
+            qs: 关节角度值列表
+
+        Returns:
+            dict: 包含以下键的字典
+                - link_names: 连杆名称列表
+                - link_mesh_transformations: 视觉几何体变换矩阵列表
+                - link_frames: 连杆坐标系变换矩阵列表
+                - collision_mesh_transformations: 碰撞体变换矩阵列表
+                - joint_names: 关节名称列表
+                - joint_frames: 关节坐标系变换矩阵列表
+                - joint_axes: 关节轴列表
+        """
+        transformations = self.forward_kinematics(qs)
+
+        link_names = []
+        link_mesh_transformations = []
+        link_frames = []
+        collision_mesh_transformations = []
+
+        # 处理每个连杆
+        for name, T in transformations.items():
+            link_info = self.links.get(name)
+            if link_info is None:
+                continue
+
+            if link_info.get("mesh") is not None:
+                # 应用视觉原点变换
+                T_visual = self.compute_transformation(
+                    link_info["origin"]["rpy"], link_info["origin"]["xyz"]
+                )
+                T_total = T @ T_visual
+            else:
+                T_total = T
+
+            link_names.append(name)
+            link_mesh_transformations.append(T_total)
+            link_frames.append(T)
+
+            # 处理碰撞体
+            collision_type = link_info.get("collision_type")
+            if collision_type is not None:
+                if link_info.get("collision_origin") is not None:
+                    T_collision = self.compute_transformation(
+                        link_info["collision_origin"]["rpy"],
+                        link_info["collision_origin"]["xyz"]
+                    )
+                else:
+                    T_collision = self.compute_transformation([0, 0, 0], [0, 0, 0])
+                collision_mesh_transformations.append(T @ T_collision)
+
+        # 处理关节
+        joint_names = []
+        joint_frames = []
+        joint_axes = []
+
+        for joint in self.joints:
+            parent = joint["parent"]
+            if parent in transformations:
+                T_parent = transformations[parent]
+            else:
+                T_parent = np.eye(4)
+
+            T_joint = self.compute_transformation(
+                joint["origin"]["rpy"], joint["origin"]["xyz"]
+            )
+            joint_frame = T_parent @ T_joint
+
+            joint_names.append(joint["name"])
+            joint_frames.append(joint_frame)
+            joint_axes.append(joint["axis"])
+
+        return {
+            'link_names': link_names,
+            'link_mesh_transformations': link_mesh_transformations,
+            'link_frames': link_frames,
+            'collision_mesh_transformations': collision_mesh_transformations,
+            'joint_names': joint_names,
+            'joint_frames': joint_frames,
+            'joint_axes': joint_axes,
+        }
     
     def build_multiple_trees(self):
         """Build multiple kinematic trees if the URDF contains disconnected structures"""
