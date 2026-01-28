@@ -138,15 +138,38 @@ class SceneManager:
             # 获取运动链信息
             self.chains, _ = parser.get_chain_info()
 
+            # 获取视觉几何体信息
+            visual_geometries = parser.get_visual_geometries()
+
             # 创建视觉模型
             for i in range(len(link_names)):
-                self._add_visual_model(
-                    link_names[i],
-                    link_mesh_files[i],
-                    link_mesh_transformations[i],
-                    link_frames[i],
-                    link_colors[i]
-                )
+                vis_geom = visual_geometries[i] if i < len(visual_geometries) else None
+
+                if link_mesh_files[i] is not None:
+                    self._add_visual_model(
+                        link_names[i],
+                        link_mesh_files[i],
+                        link_mesh_transformations[i],
+                        link_frames[i],
+                        link_colors[i]
+                    )
+                elif vis_geom is not None:
+                    self._add_primitive_visual_model(
+                        link_names[i],
+                        vis_geom,
+                        link_mesh_transformations[i],
+                        link_frames[i],
+                        link_colors[i]
+                    )
+                else:
+                    # 无视觉几何体，创建占位符
+                    self._add_visual_model(
+                        link_names[i],
+                        None,
+                        link_mesh_transformations[i],
+                        link_frames[i],
+                        link_colors[i]
+                    )
 
             # 创建碰撞体模型
             for i, geom in enumerate(collision_geometries):

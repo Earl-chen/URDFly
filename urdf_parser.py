@@ -30,6 +30,10 @@ class URDFParser:
                 geometry = visual.find("geometry")
                 if geometry is not None:
                     mesh = geometry.find("mesh")
+                    box = geometry.find("box")
+                    sphere = geometry.find("sphere")
+                    cylinder = geometry.find("cylinder")
+
                     if mesh is not None:
                         filename = mesh.get("filename")
                         # Store the mesh filename and its visual properties
@@ -37,18 +41,54 @@ class URDFParser:
                             "mesh": filename,
                             "origin": self.parse_origin(visual.find("origin")),
                             "color": self.parse_color(visual.find("material")),
+                            "visual_type": "mesh",
+                        }
+                    elif box is not None:
+                        # Box geometry visual
+                        size = list(map(float, box.get("size", "0 0 0").split()))
+                        self.links[link.get("name")] = {
+                            "mesh": None,
+                            "origin": self.parse_origin(visual.find("origin")),
+                            "color": self.parse_color(visual.find("material")),
+                            "visual_type": "box",
+                            "visual_box_size": size,
+                        }
+                    elif sphere is not None:
+                        # Sphere geometry visual
+                        radius = float(sphere.get("radius", "0"))
+                        self.links[link.get("name")] = {
+                            "mesh": None,
+                            "origin": self.parse_origin(visual.find("origin")),
+                            "color": self.parse_color(visual.find("material")),
+                            "visual_type": "sphere",
+                            "visual_sphere_radius": radius,
+                        }
+                    elif cylinder is not None:
+                        # Cylinder geometry visual
+                        radius = float(cylinder.get("radius", "0"))
+                        length = float(cylinder.get("length", "0"))
+                        self.links[link.get("name")] = {
+                            "mesh": None,
+                            "origin": self.parse_origin(visual.find("origin")),
+                            "color": self.parse_color(visual.find("material")),
+                            "visual_type": "cylinder",
+                            "visual_cylinder_radius": radius,
+                            "visual_cylinder_length": length,
                         }
                     else:
                         self.links[link.get("name")] = {
                             "mesh": None,
+                            "visual_type": None,
                         }
                 else:
                     self.links[link.get("name")] = {
                             "mesh": None,
+                            "visual_type": None,
                         }
             else:
                 self.links[link.get("name")] = {
                             "mesh": None,
+                            "visual_type": None,
                         }
 
             collision = link.find("collision")
@@ -349,6 +389,7 @@ class URDFParser:
         collision_mesh_transformations = []
         collision_link_names = []  # Track which link each collision mesh belongs to
         collision_geometries = []  # Store collision geometry type and parameters
+        visual_geometries = []  # Store visual geometry type and parameters for primitives
         
         # For joint frames
         joint_names = []
@@ -364,6 +405,10 @@ class URDFParser:
             link_info = self.links.get(name)
             if link_info is None:
                 continue
+
+            visual_type = link_info.get("visual_type")
+            vis_geom = None  # Visual geometry info for primitives
+
             if link_info.get("mesh") is not None:
                 # Get mesh file path
                 mesh_file = link_info["mesh"]
@@ -379,17 +424,53 @@ class URDFParser:
                 # Combine with the link's transformation
                 T_total = T @ T_visual
                 color = link_info["color"]
-    
-            else: # 虚拟Link
+
+            elif visual_type == 'box':
+                # Box geometry visual
+                mesh_file = None
+                origin = link_info.get("origin", {"rpy": [0, 0, 0], "xyz": [0, 0, 0]})
+                T_visual = self.compute_transformation(origin["rpy"], origin["xyz"])
+                T_total = T @ T_visual
+                color = link_info.get("color")
+                full_size = link_info.get("visual_box_size", [0.01, 0.01, 0.01])
+                # Convert to half-size (MuJoCo style) for consistency
+                half_size = [s / 2.0 for s in full_size]
+                vis_geom = {'type': 'box', 'size': half_size}
+
+            elif visual_type == 'sphere':
+                # Sphere geometry visual
+                mesh_file = None
+                origin = link_info.get("origin", {"rpy": [0, 0, 0], "xyz": [0, 0, 0]})
+                T_visual = self.compute_transformation(origin["rpy"], origin["xyz"])
+                T_total = T @ T_visual
+                color = link_info.get("color")
+                radius = link_info.get("visual_sphere_radius", 0.01)
+                vis_geom = {'type': 'sphere', 'size': [radius]}
+
+            elif visual_type == 'cylinder':
+                # Cylinder geometry visual
+                mesh_file = None
+                origin = link_info.get("origin", {"rpy": [0, 0, 0], "xyz": [0, 0, 0]})
+                T_visual = self.compute_transformation(origin["rpy"], origin["xyz"])
+                T_total = T @ T_visual
+                color = link_info.get("color")
+                radius = link_info.get("visual_cylinder_radius", 0.01)
+                full_length = link_info.get("visual_cylinder_length", 0.01)
+                # Convert to half-length (MuJoCo style) for consistency
+                half_length = full_length / 2.0
+                vis_geom = {'type': 'cylinder', 'size': [radius, half_length]}
+
+            else:  # 虚拟Link
                 mesh_file = None
                 T_total = T
                 color = None
-                
+
             link_names.append(name)
             link_mesh_files.append(mesh_file)
             link_mesh_transformations.append(T_total)
             link_frames.append(T)
             link_colors.append(color)
+            visual_geometries.append(vis_geom)
 
             # Process collision - handle all geometry types
             collision_type = link_info.get("collision_type")
@@ -471,6 +552,9 @@ class URDFParser:
             joint_child_links.append(child)
             joint_limits.append(joint["limit"])  # 添加关节限制
 
+        # Cache visual geometries for get_visual_geometries()
+        self._visual_geometries = visual_geometries
+
         return (
             link_names,
             link_mesh_files,
@@ -489,6 +573,18 @@ class URDFParser:
             collision_link_names,  # Add collision link names
             collision_geometries,  # Add collision geometry types and parameters
         )
+
+    def get_visual_geometries(self):
+        """Return the visual geometry info for primitive shapes.
+
+        Should be called after get_robot_info() to get geometry info for
+        links that use primitive shapes (box, cylinder, sphere) instead of mesh files.
+
+        Returns a list parallel to link_names, where each element is either:
+        - None (for mesh-based visuals or empty links)
+        - A dict with 'type' and 'size' keys for primitive shapes
+        """
+        return getattr(self, '_visual_geometries', [])
 
     def update_transforms(self, qs):
         """轻量级变换更新 - 仅用于关节滑块交互
