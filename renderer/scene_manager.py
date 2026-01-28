@@ -553,3 +553,39 @@ class SceneManager:
     def unhighlight_all(self):
         """取消所有高亮"""
         self.visualization.unhighlight_all()
+
+    def set_link_visibility(self, link_name, visible):
+        """设置单个连杆的可见性
+
+        Args:
+            link_name: 连杆名称
+            visible: 是否可见
+        """
+        self.visualization.set_link_visibility(link_name, visible)
+
+    def get_link_name_by_actor(self, actor):
+        """根据 actor 获取连杆名称
+
+        Args:
+            actor: VTK actor
+
+        Returns:
+            连杆名称或 None
+        """
+        return self.visualization.get_link_name_by_actor(actor)
+
+    def get_joint_for_child_link(self, link_name):
+        """获取某个 link 作为 child 的关节
+
+        当拖拽一个 link 时，控制的是该 link 作为 child 的关节
+
+        Args:
+            link_name: 连杆名称
+
+        Returns:
+            (index, joint_info) 或 (None, None)
+        """
+        for i, joint in enumerate(self.revolute_joints):
+            if joint['child'] == link_name:
+                return i, joint
+        return None, None

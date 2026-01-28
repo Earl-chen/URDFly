@@ -27,6 +27,12 @@ class SimpleModel:
         self.axes_actor = None
         self.text_actor = None
 
+        # 存储原始颜色以便高亮后恢复
+        self.original_color = self.actor.GetProperty().GetColor()
+
+        # 高亮状态标记
+        self.is_highlighted = False
+
     def apply_transform(self, transform_matrix):
         """应用变换矩阵"""
         update_transform_for_actor(self.actor, transform_matrix)
@@ -36,12 +42,29 @@ class SimpleModel:
         self.actor.GetProperty().SetOpacity(opacity)
 
     def highlight(self):
-        """高亮显示"""
-        pass
+        """高亮显示（与 URDFModel 保持一致的视觉效果）"""
+        if not self.is_highlighted:
+            # 存储当前颜色（如果尚未存储）
+            if not hasattr(self, "original_color"):
+                self.original_color = self.actor.GetProperty().GetColor()
+
+            # 设置高亮属性
+            self.actor.GetProperty().SetColor(1.0, 1.0, 0.0)  # 黄色高亮
+            self.actor.GetProperty().SetEdgeVisibility(True)
+            self.actor.GetProperty().SetEdgeColor(1.0, 1.0, 1.0)  # 白色边界
+            self.actor.GetProperty().SetLineWidth(2.0)
+            self.actor.GetProperty().SetSpecular(0.6)  # 镜面反射增强
+            self.actor.GetProperty().SetSpecularPower(30)
+            self.is_highlighted = True
 
     def unhighlight(self):
         """取消高亮"""
-        pass
+        if self.is_highlighted:
+            # 恢复原始颜色和属性
+            self.actor.GetProperty().SetColor(self.original_color)
+            self.actor.GetProperty().SetEdgeVisibility(False)
+            self.actor.GetProperty().SetSpecular(0.0)
+            self.is_highlighted = False
 
 
 class VisualizationManager:
@@ -110,6 +133,7 @@ class VisualizationManager:
             model: URDFModel 或 SimpleModel 对象
         """
         self.collision_models.append(model)
+        model.actor.SetPickable(0)  # 设置为不可拾取，避免干扰鼠标拖拽控制
         self.renderer.AddActor(model.actor)
 
         if model.axes_actor is not None:
@@ -376,3 +400,32 @@ class VisualizationManager:
         """取消所有高亮"""
         for model in self.visual_models:
             model.unhighlight()
+
+    def set_link_visibility(self, link_name, visible):
+        """设置单个连杆的可见性
+
+        Args:
+            link_name: 连杆名称
+            visible: 是否可见
+        """
+        model = self.get_visual_model_by_name(link_name)
+        if model:
+            model.actor.SetVisibility(visible)
+            if model.axes_actor is not None:
+                model.axes_actor.SetVisibility(visible)
+            if hasattr(model, 'text_actor') and model.text_actor is not None:
+                model.text_actor.SetVisibility(visible)
+
+    def get_link_name_by_actor(self, actor):
+        """根据 actor 获取连杆名称
+
+        Args:
+            actor: VTK actor
+
+        Returns:
+            连杆名称或 None
+        """
+        for model in self.visual_models:
+            if model.actor == actor:
+                return model.name
+        return None

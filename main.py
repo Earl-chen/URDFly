@@ -25,7 +25,7 @@ from xml_editor import XMLEditor
 from mdh_dialog import MDHDialog
 from decomp_dialog import DecompDialog
 
-from renderer import SceneManager
+from renderer import SceneManager, DragJointInteractorStyle
 from ui import ControlPanel, JointPanel
 
 
@@ -113,8 +113,15 @@ class URDFViewer(QMainWindow):
 
         # 设置交互器
         self.interactor = self.vtk_widget.GetRenderWindow().GetInteractor()
-        style = vtk.vtkInteractorStyleTrackballCamera()
-        self.interactor.SetInteractorStyle(style)
+        self.interactor_style = DragJointInteractorStyle()
+        self.interactor_style.set_callbacks(
+            self._get_link_name_by_actor,
+            self._get_joint_for_child_link,
+            self._on_joint_drag,
+            self._on_drag_start,
+            self._on_drag_end
+        )
+        self.interactor.SetInteractorStyle(self.interactor_style)
         self.interactor.Initialize()
         self.interactor.Start()
 
@@ -127,6 +134,7 @@ class URDFViewer(QMainWindow):
         self.control_panel.language_changed.connect(self.on_language_changed)
         self.control_panel.chain_selected.connect(self.on_chain_selected)
         self.control_panel.link_selected.connect(self.on_link_selected)
+        self.control_panel.link_visibility_changed.connect(self.on_link_visibility_changed)
 
         self.control_panel.open_file_requested.connect(self.open_file_dialog)
         self.control_panel.edit_file_requested.connect(self.edit_urdf_file)
@@ -342,6 +350,66 @@ class URDFViewer(QMainWindow):
         """连杆选择"""
         self.scene.unhighlight_all()
         self.scene.highlight_link(link_name)
+        self.scene.redraw()
+
+    def on_link_visibility_changed(self, link_name, visible):
+        """连杆可见性变化"""
+        self.scene.set_link_visibility(link_name, visible)
+        self.scene.redraw()
+
+    # === 拖拽控制回调 ===
+
+    def _get_link_name_by_actor(self, actor):
+        """根据 actor 获取连杆名称（回调）"""
+        return self.scene.get_link_name_by_actor(actor)
+
+    def _get_joint_for_child_link(self, link_name):
+        """获取某个 link 作为 child 的关节（回调）"""
+        return self.scene.get_joint_for_child_link(link_name)
+
+    def _on_joint_drag(self, joint_index, delta_angle):
+        """关节拖拽回调
+
+        Args:
+            joint_index: 关节索引
+            delta_angle: 角度增量（弧度）
+        """
+        # 获取当前关节值
+        current_values = self.joint_panel.get_values()
+
+        # 获取关节限位
+        joint_info = self.scene.revolute_joints[joint_index]
+        lower = joint_info['lower']
+        upper = joint_info['upper']
+
+        # 计算新值并限制在范围内
+        new_value = current_values[joint_index] + delta_angle
+        new_value = max(lower, min(upper, new_value))
+
+        # 更新关节面板滑块
+        self.joint_panel.set_slider_value(joint_index, new_value)
+
+        # 更新场景
+        joint_values = self.joint_panel.get_values()
+        self.scene.update_joint_angles(joint_values)
+        self.scene.redraw()
+
+    def _on_drag_start(self, link_name):
+        """拖拽开始回调 - 高亮显示被拖拽的 link
+
+        Args:
+            link_name: 被拖拽的连杆名称
+        """
+        self.scene.highlight_link(link_name)
+        self.scene.redraw()
+
+    def _on_drag_end(self, link_name):
+        """拖拽结束回调 - 取消高亮显示
+
+        Args:
+            link_name: 被拖拽的连杆名称
+        """
+        self.scene.unhighlight_all()
         self.scene.redraw()
 
     # === 关节控制 ===

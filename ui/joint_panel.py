@@ -222,6 +222,28 @@ class JointPanel(QWidget):
         """获取当前关节值（弧度）"""
         return self.joint_values.copy()
 
+    def set_slider_value(self, index, angle):
+        """设置单个滑块的值
+
+        Args:
+            index: 关节索引
+            angle: 弧度角度值
+        """
+        if 0 <= index < len(self.joint_sliders):
+            self.joint_values[index] = angle
+            target = int(round(angle * 100.0))
+            slider = self.joint_sliders[index]
+            clamped = max(slider.minimum(), min(slider.maximum(), target))
+
+            # 阻止信号避免重复更新
+            was_blocked = slider.blockSignals(True)
+            slider.setValue(clamped)
+            slider.blockSignals(was_blocked)
+
+            # 更新标签
+            if index < len(self.joint_value_labels):
+                self.joint_value_labels[index].setText(self._format_angle(angle))
+
     def reset_to_zero(self):
         """重置所有关节到零位"""
         for i, slider in enumerate(self.joint_sliders):

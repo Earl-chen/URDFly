@@ -27,6 +27,7 @@ class ControlPanel(QWidget):
     language_changed = pyqtSignal(str)  # 语言代码
     chain_selected = pyqtSignal(int)  # 链索引
     link_selected = pyqtSignal(str)  # 连杆名称
+    link_visibility_changed = pyqtSignal(str, bool)  # 连杆名称, 是否可见
 
     open_file_requested = pyqtSignal()
     edit_file_requested = pyqtSignal()
@@ -78,6 +79,7 @@ class ControlPanel(QWidget):
         self.link_list = QListWidget()
         self.link_list.setSelectionMode(QListWidget.SingleSelection)
         self.link_list.itemSelectionChanged.connect(self._on_link_selected)
+        self.link_list.itemChanged.connect(self._on_link_item_changed)
         chain_layout.addWidget(self.link_list)
 
         chain_widget = QWidget()
@@ -194,6 +196,12 @@ class ControlPanel(QWidget):
             link_name = selected_items[0].data(Qt.UserRole)
             self.link_selected.emit(link_name)
 
+    def _on_link_item_changed(self, item):
+        """连杆复选框状态变化处理"""
+        link_name = item.data(Qt.UserRole)
+        visible = item.checkState() == Qt.Checked
+        self.link_visibility_changed.emit(link_name, visible)
+
     def populate_chains(self, chains):
         """填充运动链列表
 
@@ -209,16 +217,20 @@ class ControlPanel(QWidget):
             self.chain_combo.setCurrentIndex(0)
 
     def populate_links(self, link_names):
-        """填充连杆列表
+        """填充连杆列表（带复选框）
 
         Args:
             link_names: 连杆名称列表
         """
+        self.link_list.blockSignals(True)
         self.link_list.clear()
         for link_name in link_names:
             item = QListWidgetItem(link_name)
             item.setData(Qt.UserRole, link_name)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked)
             self.link_list.addItem(item)
+        self.link_list.blockSignals(False)
 
     def clear_chains(self):
         """清除运动链和连杆列表"""

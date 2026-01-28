@@ -11,6 +11,7 @@ from .visualization_manager import VisualizationManager, SimpleModel
 from .inertia_visualizer import InertiaVisualizer
 from .axes_manager import AxesManager
 from .scene_manager import SceneManager
+from .drag_interaction_style import DragJointInteractorStyle
 
 __all__ = [
     'GeometryFactory',
@@ -20,4 +21,5 @@ __all__ = [
     'InertiaVisualizer',
     'AxesManager',
     'SceneManager',
+    'DragJointInteractorStyle',
 ]
