@@ -47,28 +47,29 @@ import vtk
 from urdf_parser import URDFParser
 from urdf_vtk_model import URDFModel
 from simplify_mesh import create_detailed_approximation
+from mjcf_parser import MJCFParser
 
 
 class DragDropVTKWidget(QVTKRenderWindowInteractor):
-    """Custom VTK widget that supports drag-and-drop of URDF files"""
-    
+    """Custom VTK widget that supports drag-and-drop of URDF and MJCF files"""
+
     def __init__(self, parent=None):
         super().__init__()
         self.parent_viewer = parent
         self.setAcceptDrops(True)
-    
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         """Handle drag enter event"""
         if event.mimeData().hasUrls():
-            # Check if any of the dragged files is a URDF file
+            # Check if any of the dragged files is a URDF or MJCF file
             for url in event.mimeData().urls():
                 if url.isLocalFile():
                     file_path = url.toLocalFile()
-                    if file_path.lower().endswith('.urdf'):
+                    if file_path.lower().endswith('.urdf') or file_path.lower().endswith('.xml'):
                         event.acceptProposedAction()
                         return
         event.ignore()
-    
+
     def dropEvent(self, event: QDropEvent):
         """Handle drop event"""
         if event.mimeData().hasUrls():
@@ -79,6 +80,12 @@ class DragDropVTKWidget(QVTKRenderWindowInteractor):
                         # Load the URDF file
                         if self.parent_viewer:
                             self.parent_viewer.load_urdf_file(file_path)
+                        event.acceptProposedAction()
+                        return
+                    elif file_path.lower().endswith('.xml'):
+                        # Load the MJCF file (check if it's a valid MuJoCo XML)
+                        if self.parent_viewer:
+                            self.parent_viewer.load_mjcf_file(file_path)
                         event.acceptProposedAction()
                         return
         event.ignore()
@@ -122,7 +129,8 @@ class URDFViewer(QMainWindow):
 
         self.selected_chain = None  # Currently selected chain
         self.selected_chain_index = 0  # Index of the currently selected chain
-        self.current_urdf_file = None  # Path to the currently loaded URDF file
+        self.current_urdf_file = None  # Path to the currently loaded URDF/MJCF file
+        self.current_parser_type = None  # 'urdf' or 'mjcf'
         self.collision_mesh_files = None
         self.inertial_data = []  # List to store inertial data for each link
 
@@ -511,7 +519,8 @@ class URDFViewer(QMainWindow):
                 
                 # Store the current URDF file path only after successful loading
                 self.current_urdf_file = filename
-                
+                self.current_parser_type = 'urdf'
+
                 # Update the current file label
                 self.update_current_file_label()
 
@@ -521,14 +530,210 @@ class URDFViewer(QMainWindow):
                     self, self.translation_manager.tr("error"), msg.replace("{}", str(e))
                 )
 
+    def load_mjcf_file(self, filename):
+        """Load a MuJoCo MJCF file and visualize the robot"""
+        if filename and os.path.exists(filename):
+            # Check if it's a valid MJCF file
+            if not MJCFParser.is_valid_mjcf(filename):
+                QMessageBox.warning(
+                    self, self.translation_manager.tr("warning"),
+                    self.translation_manager.tr("invalid_mjcf_file")
+                )
+                return
+
+            # Clear previous models
+            self.clear_models()
+
+            # Parse the MJCF file
+            try:
+                parser = MJCFParser(filename)
+
+                # Get robot info for visualization (same format as URDFParser)
+                (link_names,
+                link_mesh_files,
+                link_mesh_transformations,
+                link_frames,
+                link_colors,
+                joint_names,
+                joint_frames,
+                joint_types,
+                joint_axes,
+                joint_parent_links,
+                joint_child_links,
+                joint_limits,
+                collision_mesh_files,
+                collision_mesh_transformations,
+                collision_link_names,
+                collision_geometries,
+                ) = parser.get_robot_info()
+
+                # Store revolute joints for slider controls
+                self.revolute_joints = []
+                for i, joint_type in enumerate(joint_types):
+                    if joint_type == 'revolute':
+                        self.revolute_joints.append({
+                            'name': joint_names[i],
+                            'index': i,
+                            'parent': joint_parent_links[i],
+                            'child': joint_child_links[i],
+                            'axis': joint_axes[i],
+                            'lower': joint_limits[i]['lower'],
+                            'upper': joint_limits[i]['upper']
+                        })
+
+                # Create joint sliders
+                self.create_joint_sliders()
+
+                # MJCF doesn't have the same chain structure as URDF
+                # Clear chains - MDH features won't work for MJCF
+                self.chains = []
+
+                # Get visual geometry info for primitive shapes
+                visual_geometries = parser.get_visual_geometries()
+
+                # Create models for each link
+                for i in range(len(link_names)):
+                    vis_geom = visual_geometries[i] if i < len(visual_geometries) else None
+
+                    if link_mesh_files[i] is not None:
+                        # Has mesh file - use standard method
+                        self.add_urdf_model(
+                            link_names[i],
+                            link_mesh_files[i],
+                            link_mesh_transformations[i],
+                            link_frames[i],
+                            link_colors[i],
+                        )
+                    elif vis_geom is not None:
+                        # Primitive geometry - use appropriate visual method
+                        geom_type = vis_geom.get('type')
+                        geom_size = vis_geom.get('size', [0.01, 0.01, 0.01])
+
+                        if geom_type == 'box':
+                            self.add_visual_box(
+                                link_names[i],
+                                geom_size,
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i]
+                            )
+                        elif geom_type == 'sphere':
+                            self.add_visual_sphere(
+                                link_names[i],
+                                geom_size[0],  # radius
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i]
+                            )
+                        elif geom_type == 'cylinder':
+                            self.add_visual_cylinder(
+                                link_names[i],
+                                geom_size[0],  # radius
+                                geom_size[1],  # half-length
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i]
+                            )
+                        elif geom_type == 'capsule':
+                            self.add_visual_capsule(
+                                link_names[i],
+                                geom_size[0],  # radius
+                                geom_size[1],  # half-length
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i]
+                            )
+                        else:
+                            # Unknown geometry type, create placeholder
+                            self.add_urdf_model(
+                                link_names[i],
+                                None,
+                                link_mesh_transformations[i],
+                                link_frames[i],
+                                link_colors[i],
+                            )
+                    else:
+                        # No visual geometry - create placeholder (small sphere)
+                        self.add_urdf_model(
+                            link_names[i],
+                            None,
+                            link_mesh_transformations[i],
+                            link_frames[i],
+                            link_colors[i],
+                        )
+
+                # Create models for each collision link
+                for i, geom in enumerate(collision_geometries):
+                    geom_type = geom['type']
+                    if geom_type == 'mesh':
+                        # Use mesh file
+                        self.add_urdf_model(
+                            f"collision_{i}",
+                            collision_mesh_files[i],
+                            collision_mesh_transformations[i],
+                            None,
+                            None,
+                            model_type='collision'
+                        )
+                    elif geom_type == 'box':
+                        # Create box geometry directly
+                        self.add_collision_box(
+                            f"collision_{i}",
+                            geom['size'],
+                            collision_mesh_transformations[i]
+                        )
+                    elif geom_type == 'sphere':
+                        # Create sphere geometry directly
+                        self.add_collision_sphere(
+                            f"collision_{i}",
+                            geom['radius'],
+                            collision_mesh_transformations[i]
+                        )
+                    elif geom_type == 'cylinder':
+                        # Create cylinder geometry directly
+                        self.add_collision_cylinder(
+                            f"collision_{i}",
+                            geom['radius'],
+                            geom['length'],
+                            collision_mesh_transformations[i]
+                        )
+
+                # use link mesh files to be decomposed
+                self.collision_mesh_files = [f for f in link_mesh_files if f is not None]
+
+                # Populate the chain tree (will be empty for MJCF)
+                self.populate_chain_tree()
+
+                # Reset camera to show all actors
+                self.renderer.ResetCamera()
+                self.vtk_widget.GetRenderWindow().Render()
+
+                # Store the current file path only after successful loading
+                self.current_urdf_file = filename
+                self.current_parser_type = 'mjcf'
+
+                # Update the current file label
+                self.update_current_file_label()
+
+            except Exception as e:
+                msg = self.translation_manager.tr("load_mjcf_failed")
+                QMessageBox.critical(
+                    self, self.translation_manager.tr("error"), msg.replace("{}", str(e))
+                )
+
     def open_urdf_file(self):
-        """Open a URDF file dialog and load the selected file"""
+        """Open a URDF/MJCF file dialog and load the selected file"""
         filename, _ = QFileDialog.getOpenFileName(
-            self, self.translation_manager.tr("dialog_open_urdf"), "", self.translation_manager.tr("dialog_urdf_filter")
+            self, self.translation_manager.tr("dialog_open_robot"),
+            "",
+            self.translation_manager.tr("dialog_robot_filter")
         )
 
         if filename:
-            self.load_urdf_file(filename)
+            if filename.lower().endswith('.urdf'):
+                self.load_urdf_file(filename)
+            elif filename.lower().endswith('.xml'):
+                self.load_mjcf_file(filename)
 
     def add_urdf_model(self, name, mesh_file, mesh_transform, frame, color, model_type='visual'):
 
@@ -658,11 +863,222 @@ class URDFViewer(QMainWindow):
         except Exception as e:
             print(f"Error creating collision cylinder {name}: {e}")
 
+    # === Visual primitive geometry methods for MJCF models ===
+    def add_visual_box(self, name, size, transform, frame, color):
+        """Add a box visual geometry to the scene (for MJCF primitive geoms)"""
+        try:
+            cube = vtk.vtkCubeSource()
+            # MuJoCo size is half-extents, convert to full size
+            cube.SetXLength(size[0] * 2)
+            cube.SetYLength(size[1] * 2)
+            cube.SetZLength(size[2] * 2)
+            cube.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(cube.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            if color:
+                actor.GetProperty().SetColor(color[0], color[1], color[2])
+                if len(color) > 3:
+                    actor.GetProperty().SetOpacity(color[3])
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+
+            # Create a simple model object to track this
+            model_obj = type('obj', (object,), {
+                'actor': actor,
+                'name': name,
+                'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t),
+                'axes_actor': None,
+                'text_actor': None
+            })()
+            self.models.append(model_obj)
+
+        except Exception as e:
+            print(f"Error creating visual box {name}: {e}")
+
+    def add_visual_sphere(self, name, radius, transform, frame, color):
+        """Add a sphere visual geometry to the scene (for MJCF primitive geoms)"""
+        try:
+            sphere = vtk.vtkSphereSource()
+            sphere.SetRadius(radius)
+            sphere.SetPhiResolution(24)
+            sphere.SetThetaResolution(24)
+            sphere.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(sphere.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            if color:
+                actor.GetProperty().SetColor(color[0], color[1], color[2])
+                if len(color) > 3:
+                    actor.GetProperty().SetOpacity(color[3])
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+
+            model_obj = type('obj', (object,), {
+                'actor': actor,
+                'name': name,
+                'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t),
+                'axes_actor': None,
+                'text_actor': None
+            })()
+            self.models.append(model_obj)
+
+        except Exception as e:
+            print(f"Error creating visual sphere {name}: {e}")
+
+    def add_visual_cylinder(self, name, radius, length, transform, frame, color):
+        """Add a cylinder visual geometry to the scene (for MJCF primitive geoms)"""
+        try:
+            cylinder = vtk.vtkCylinderSource()
+            cylinder.SetRadius(radius)
+            # MuJoCo length is half-length, convert to full length
+            cylinder.SetHeight(length * 2)
+            cylinder.SetResolution(24)
+            cylinder.Update()
+
+            # VTK cylinder is along Y-axis, but MuJoCo uses Z-axis
+            # Add a rotation transform
+            rotate_transform = vtk.vtkTransform()
+            rotate_transform.RotateX(90)
+
+            transform_filter = vtk.vtkTransformPolyDataFilter()
+            transform_filter.SetInputConnection(cylinder.GetOutputPort())
+            transform_filter.SetTransform(rotate_transform)
+            transform_filter.Update()
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(transform_filter.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            if color:
+                actor.GetProperty().SetColor(color[0], color[1], color[2])
+                if len(color) > 3:
+                    actor.GetProperty().SetOpacity(color[3])
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+
+            model_obj = type('obj', (object,), {
+                'actor': actor,
+                'name': name,
+                'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t),
+                'axes_actor': None,
+                'text_actor': None
+            })()
+            self.models.append(model_obj)
+
+        except Exception as e:
+            print(f"Error creating visual cylinder {name}: {e}")
+
+    def add_visual_capsule(self, name, radius, length, transform, frame, color):
+        """Add a capsule visual geometry to the scene (for MJCF primitive geoms)
+
+        Capsule = cylinder + two hemispherical caps
+        """
+        try:
+            # Create capsule using vtkCapsuleSource if available, otherwise approximate
+            # VTK 9+ has vtkCapsuleSource
+            try:
+                capsule = vtk.vtkCapsuleSource()
+                capsule.SetRadius(radius)
+                # MuJoCo length is half-length of the cylindrical part
+                capsule.SetCylinderLength(length * 2)
+                capsule.SetPhiResolution(24)
+                capsule.SetThetaResolution(24)
+                capsule.Update()
+
+                # VTK capsule is along Y-axis, rotate to Z-axis
+                rotate_transform = vtk.vtkTransform()
+                rotate_transform.RotateX(90)
+
+                transform_filter = vtk.vtkTransformPolyDataFilter()
+                transform_filter.SetInputConnection(capsule.GetOutputPort())
+                transform_filter.SetTransform(rotate_transform)
+                transform_filter.Update()
+
+                mapper = vtk.vtkPolyDataMapper()
+                mapper.SetInputConnection(transform_filter.GetOutputPort())
+            except AttributeError:
+                # Fallback: use cylinder if vtkCapsuleSource not available
+                cylinder = vtk.vtkCylinderSource()
+                cylinder.SetRadius(radius)
+                cylinder.SetHeight(length * 2 + radius * 2)  # Approximate capsule length
+                cylinder.SetResolution(24)
+                cylinder.Update()
+
+                rotate_transform = vtk.vtkTransform()
+                rotate_transform.RotateX(90)
+
+                transform_filter = vtk.vtkTransformPolyDataFilter()
+                transform_filter.SetInputConnection(cylinder.GetOutputPort())
+                transform_filter.SetTransform(rotate_transform)
+                transform_filter.Update()
+
+                mapper = vtk.vtkPolyDataMapper()
+                mapper.SetInputConnection(transform_filter.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            if color:
+                actor.GetProperty().SetColor(color[0], color[1], color[2])
+                if len(color) > 3:
+                    actor.GetProperty().SetOpacity(color[3])
+
+            # Apply transform
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(transform.flatten())
+            actor.SetUserTransform(vtk_transform)
+
+            self.renderer.AddActor(actor)
+
+            model_obj = type('obj', (object,), {
+                'actor': actor,
+                'name': name,
+                'apply_transform': lambda obj, t: _update_transform_for_actor(actor, t),
+                'axes_actor': None,
+                'text_actor': None
+            })()
+            self.models.append(model_obj)
+
+        except Exception as e:
+            print(f"Error creating visual capsule {name}: {e}")
+
     def _update_actor_transform(self, actor, transform_matrix):
         """Helper method to update actor transform"""
         vtk_transform = vtk.vtkTransform()
         vtk_transform.SetMatrix(transform_matrix.flatten())
         actor.SetUserTransform(vtk_transform)
+
+    def _create_parser(self):
+        """Create the appropriate parser based on the current file type.
+
+        Returns URDFParser for URDF files, MJCFParser for MJCF files.
+        """
+        if self.current_parser_type == 'mjcf':
+            return MJCFParser(self.current_urdf_file)
+        else:
+            return URDFParser(self.current_urdf_file)
 
     def clear_models(self):
         """Clear all models from the scene"""
@@ -725,6 +1141,7 @@ class URDFViewer(QMainWindow):
         # Reset selected chain and current URDF file
         self.selected_chain = None
         self.current_urdf_file = None
+        self.current_parser_type = None
 
         # Update current file label
         self.update_current_file_label()
@@ -882,9 +1299,17 @@ class URDFViewer(QMainWindow):
         for text_actor in self.mdh_text_actors:
             self.renderer.RemoveActor(text_actor)
         self.mdh_text_actors = []
-        
+
+        # MDH frames only work for URDF files (requires get_chain_info and get_mdh_frames)
+        if self.current_parser_type != 'urdf':
+            QMessageBox.warning(
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("mdh_urdf_only")
+            )
+            return
+
         # Create a fresh parser instance to ensure we get the latest data
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         
         # Get chain information to ensure we have the latest chain data
         chains, _ = parser.get_chain_info()
@@ -1046,8 +1471,16 @@ class URDFViewer(QMainWindow):
             )
             return
 
+        # MDH parameters only work for URDF files
+        if self.current_parser_type != 'urdf':
+            QMessageBox.warning(
+                self, self.translation_manager.tr("warning"),
+                self.translation_manager.tr("mdh_urdf_only")
+            )
+            return
+
         # Create a fresh parser instance to ensure we get the latest MDH parameters
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
 
         # Get chain information to ensure we have the latest chain data
         chains, _ = parser.get_chain_info()
@@ -1330,9 +1763,9 @@ class URDFViewer(QMainWindow):
         """Update the model visualization with current joint angles"""
         if not self.current_urdf_file:
             return
-        
+
         # Create a fresh parser instance
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         
         # Get updated robot info with joint angles
         (link_names,
@@ -1374,35 +1807,30 @@ class URDFViewer(QMainWindow):
                     model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
 
         # === 新增：更新碰撞体 ===
-        # 建立从连杆名称到碰撞体变换的映射，然后更新每个碰撞体的位置和方向
-        # Build a map from link name to collision transform
-        collision_transform_map = {}
-        for i, link_name in enumerate(collision_link_names):
-            collision_transform_map[link_name] = collision_mesh_transformations[i]
-
+        # 直接使用索引更新每个碰撞体的位置和方向
+        # 不使用 link_name 映射，因为一个 body 可能有多个 geom
         for i, model in enumerate(self.models_collision):
             # Extract link index from model name (format: "collision_{i}")
             if model.name.startswith("collision_"):
                 collision_idx = int(model.name.split("_")[1])
-                if collision_idx < len(collision_link_names):
-                    link_name = collision_link_names[collision_idx]
-                    if link_name in collision_transform_map:
-                        # Update mesh transformation
-                        model.apply_transform(collision_transform_map[link_name])
+                if collision_idx < len(collision_mesh_transformations):
+                    transform = collision_mesh_transformations[collision_idx]
+                    # Update mesh transformation
+                    model.apply_transform(transform)
 
-                        # Update axes and text actors
-                        if model.axes_actor:
-                            vtk_transform = vtk.vtkTransform()
-                            vtk_transform.SetMatrix(collision_transform_map[link_name].flatten())
-                            model.axes_actor.SetUserTransform(vtk_transform)
+                    # Update axes and text actors
+                    if model.axes_actor:
+                        vtk_transform = vtk.vtkTransform()
+                        vtk_transform.SetMatrix(transform.flatten())
+                        model.axes_actor.SetUserTransform(vtk_transform)
 
-                        if model.text_actor:
-                            # Update text position based on new frame
-                            z_endpoint = [0, 0, 0.05, 1]
-                            vtk_transform = vtk.vtkTransform()
-                            vtk_transform.SetMatrix(collision_transform_map[link_name].flatten())
-                            transformed_point = vtk_transform.TransformPoint(z_endpoint[0], z_endpoint[1], z_endpoint[2])
-                            model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
+                    if model.text_actor:
+                        # Update text position based on new frame
+                        z_endpoint = [0, 0, 0.05, 1]
+                        vtk_transform = vtk.vtkTransform()
+                        vtk_transform.SetMatrix(transform.flatten())
+                        transformed_point = vtk_transform.TransformPoint(z_endpoint[0], z_endpoint[1], z_endpoint[2])
+                        model.text_actor.SetAttachmentPoint(transformed_point[0], transformed_point[1], transformed_point[2])
 
         # === 新增：更新关节轴 ===
         # 根据新的关节位置和旋转，更新关节轴圆柱体的位置和方向
@@ -1646,7 +2074,7 @@ class URDFViewer(QMainWindow):
         if not self.current_urdf_file:
             return
 
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         result = parser.get_robot_info(qs=self.joint_values)
         # result has 14 values: link_names, link_mesh_files, link_mesh_transformations, link_frames, link_colors,
         #                         joint_names, joint_frames, joint_types, joint_axes, joint_parent_links, joint_child_links,
@@ -1744,10 +2172,18 @@ class URDFViewer(QMainWindow):
         if not self.current_urdf_file:
             return
 
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
 
+        # Track processed links to avoid duplicates (for MJCF with multiple geoms per body)
+        processed_links = set()
+
         for link_name, link_frame in zip(link_names, link_frames):
+            # Skip if already processed (handles multiple geoms per body)
+            if link_name in processed_links:
+                continue
+            processed_links.add(link_name)
+
             # Get inertial data from parser
             link_info = parser.links.get(link_name)
             if link_info is None or link_info.get('inertial') is None:
@@ -1998,10 +2434,18 @@ class URDFViewer(QMainWindow):
         if not self.current_urdf_file:
             return
 
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser()
         link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _ = parser.get_robot_info(qs=self.joint_values)
 
+        # Track processed links to avoid duplicates (for MJCF with multiple geoms per body)
+        processed_links = set()
+
         for link_name, link_frame in zip(link_names, link_frames):
+            # Skip if already processed (handles multiple geoms per body)
+            if link_name in processed_links:
+                continue
+            processed_links.add(link_name)
+
             # Get inertial data from parser
             link_info = parser.links.get(link_name)
             if link_info is None or link_info.get('inertial') is None:
