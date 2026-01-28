@@ -7,17 +7,17 @@
 支持缩放、平移、点击交互和 PNG/SVG 导出。
 """
 
-import math
 from collections import deque
 
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QGraphicsView, QGraphicsScene,
+    QDialog, QVBoxLayout, QGraphicsView, QGraphicsScene,
     QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsLineItem,
-    QGraphicsTextItem, QPushButton, QToolBar, QFileDialog, QMessageBox
+    QGraphicsTextItem, QGraphicsItem, QPushButton, QToolBar,
+    QFileDialog, QMessageBox
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import (
-    QPen, QBrush, QColor, QFont, QPainter, QTransform
+    QPen, QBrush, QColor, QFont, QPainter, QFontMetrics
 )
 from PyQt5.QtSvg import QSvgGenerator
 
@@ -45,20 +45,29 @@ JOINT_SELECTED_COLOR = QColor("#FFD700")  # 金色高亮
 LINE_COLOR = QColor("#888888")
 
 # 布局参数
-LEVEL_SPACING = 120  # 层级间距（Y方向）
-NODE_SPACING = 100   # 同层节点间距（X方向）
-LINK_WIDTH = 80
-LINK_HEIGHT = 30
-JOINT_RADIUS = 15
+LEVEL_SPACING = 100  # 层级间距（Y方向）
+NODE_SPACING = 150   # 同层节点间距（X方向）
+LINK_HEIGHT = 28
+LINK_PADDING = 16    # 文字左右内边距
+JOINT_RADIUS = 10    # 关节圆半径（小圆点）
 
 
 class LinkNode(QGraphicsRectItem):
-    """连杆节点 - 圆角矩形"""
+    """连杆节点 - 圆角矩形，宽度自适应文本"""
 
-    def __init__(self, name, x, y, width=LINK_WIDTH, height=LINK_HEIGHT):
+    def __init__(self, name, x, y):
+        # 计算文本宽度来确定节点宽度
+        font = QFont("Arial", 9)
+        fm = QFontMetrics(font)
+        text_width = fm.horizontalAdvance(name)
+        width = text_width + LINK_PADDING * 2
+        height = LINK_HEIGHT
+
         super().__init__(0, 0, width, height)
         self.name = name
         self.node_type = "link"
+        self._width = width
+        self._height = height
 
         # 设置位置（中心对齐）
         self.setPos(x - width / 2, y - height / 2)
@@ -69,7 +78,8 @@ class LinkNode(QGraphicsRectItem):
 
         # 添加文本标签
         self.text_item = QGraphicsTextItem(name, self)
-        self.text_item.setFont(QFont("Arial", 8))
+        self.text_item.setFont(font)
+        self.text_item.setDefaultTextColor(QColor("#333333"))
 
         # 计算文本居中位置
         text_rect = self.text_item.boundingRect()
@@ -87,19 +97,18 @@ class LinkNode(QGraphicsRectItem):
 
     def get_center(self):
         """获取节点中心坐标"""
-        rect = self.rect()
         pos = self.pos()
-        return QPointF(pos.x() + rect.width() / 2, pos.y() + rect.height() / 2)
+        return QPointF(pos.x() + self._width / 2, pos.y() + self._height / 2)
 
     def get_top_center(self):
         """获取顶部中心点"""
         pos = self.pos()
-        return QPointF(pos.x() + self.rect().width() / 2, pos.y())
+        return QPointF(pos.x() + self._width / 2, pos.y())
 
     def get_bottom_center(self):
         """获取底部中心点"""
         pos = self.pos()
-        return QPointF(pos.x() + self.rect().width() / 2, pos.y() + self.rect().height())
+        return QPointF(pos.x() + self._width / 2, pos.y() + self._height)
 
     def set_selected(self, selected):
         """设置选中状态"""
@@ -122,78 +131,107 @@ class LinkNode(QGraphicsRectItem):
         super().hoverLeaveEvent(event)
 
 
-class JointNode(QGraphicsEllipseItem):
-    """关节节点 - 圆形"""
+class JointNode(QGraphicsItem):
+    """关节节点 - 小圆点 + 右侧文字标签"""
 
     def __init__(self, name, joint_type, x, y, radius=JOINT_RADIUS):
-        super().__init__(0, 0, radius * 2, radius * 2)
+        super().__init__()
         self.name = name
         self.node_type = "joint"
         self.joint_type = joint_type
         self.radius = radius
 
-        # 设置位置（中心对齐）
-        self.setPos(x - radius, y - radius)
-
         # 获取关节类型对应的颜色
-        color = JOINT_COLORS.get(joint_type.lower(), QColor("#808080"))
+        self.color = JOINT_COLORS.get(joint_type.lower(), QColor("#808080"))
 
-        # 设置样式
-        self.setPen(QPen(color.darker(120), 2))
-        self.setBrush(QBrush(color))
+        # 文字标签
+        self.font = QFont("Arial", 8)
+        fm = QFontMetrics(self.font)
+        self.text_width = fm.horizontalAdvance(name)
+        self.text_height = fm.height()
 
-        # 添加文本标签
-        self.text_item = QGraphicsTextItem(name, self)
-        self.text_item.setFont(QFont("Arial", 7))
-        self.text_item.setDefaultTextColor(Qt.white)
+        # 计算包围盒：圆 + 间隙 + 文字
+        self.gap = 6  # 圆和文字之间的间隙
+        self.total_width = radius * 2 + self.gap + self.text_width
+        self.total_height = max(radius * 2, self.text_height)
 
-        # 计算文本居中位置
-        text_rect = self.text_item.boundingRect()
-        text_x = radius - text_rect.width() / 2
-        text_y = radius - text_rect.height() / 2
-        self.text_item.setPos(text_x, text_y)
+        # 设置位置（以圆心为锚点）
+        self.setPos(x, y)
 
-        # 允许选择
-        self.setFlag(QGraphicsEllipseItem.ItemIsSelectable, True)
+        # 允许选择和悬停
+        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
         self.setAcceptHoverEvents(True)
 
-        # 保存原始颜色
-        self._original_brush = QBrush(color)
+        # 状态
         self._selected = False
+        self._hovered = False
+
+    def boundingRect(self):
+        """返回边界矩形"""
+        # 包含圆和文字的区域
+        return QRectF(
+            -self.radius - 2,
+            -self.total_height / 2 - 2,
+            self.total_width + 4,
+            self.total_height + 4
+        )
+
+    def paint(self, painter, option, widget):
+        """绘制节点"""
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # 确定颜色
+        if self._selected:
+            fill_color = JOINT_SELECTED_COLOR
+        elif self._hovered:
+            fill_color = JOINT_SELECTED_COLOR.lighter(150)
+        else:
+            fill_color = self.color
+
+        # 绘制圆
+        painter.setPen(QPen(fill_color.darker(120), 2))
+        painter.setBrush(QBrush(fill_color))
+        painter.drawEllipse(
+            QPointF(0, 0),
+            self.radius, self.radius
+        )
+
+        # 绘制文字（圆的右侧）
+        painter.setFont(self.font)
+        painter.setPen(QPen(QColor("#555555")))
+        text_x = self.radius + self.gap
+        text_y = self.text_height / 4  # 垂直居中微调
+        painter.drawText(QPointF(text_x, text_y), self.name)
 
     def get_center(self):
-        """获取节点中心坐标"""
-        pos = self.pos()
-        return QPointF(pos.x() + self.radius, pos.y() + self.radius)
+        """获取圆心坐标"""
+        return self.pos()
 
     def get_top_center(self):
         """获取顶部中心点"""
         pos = self.pos()
-        return QPointF(pos.x() + self.radius, pos.y())
+        return QPointF(pos.x(), pos.y() - self.radius)
 
     def get_bottom_center(self):
         """获取底部中心点"""
         pos = self.pos()
-        return QPointF(pos.x() + self.radius, pos.y() + self.radius * 2)
+        return QPointF(pos.x(), pos.y() + self.radius)
 
     def set_selected(self, selected):
         """设置选中状态"""
         self._selected = selected
-        if selected:
-            self.setBrush(QBrush(JOINT_SELECTED_COLOR))
-        else:
-            self.setBrush(self._original_brush)
+        self.update()
 
     def hoverEnterEvent(self, event):
-        """鼠标进入高亮"""
-        if not self._selected:
-            self.setBrush(QBrush(JOINT_SELECTED_COLOR.lighter(150)))
+        """鼠标进入"""
+        self._hovered = True
+        self.update()
         super().hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event):
-        """鼠标离开恢复"""
-        if not self._selected:
-            self.setBrush(self._original_brush)
+        """鼠标离开"""
+        self._hovered = False
+        self.update()
         super().hoverLeaveEvent(event)
 
 
@@ -224,10 +262,8 @@ class TopologyGraphView(QGraphicsView):
     def wheelEvent(self, event):
         """滚轮缩放"""
         if event.angleDelta().y() > 0:
-            # 放大
             factor = self._zoom_factor
         else:
-            # 缩小
             factor = 1 / self._zoom_factor
 
         # 检查缩放限制
@@ -241,7 +277,6 @@ class TopologyGraphView(QGraphicsView):
         """适应窗口"""
         scene_rect = self.scene().itemsBoundingRect()
         if not scene_rect.isEmpty():
-            # 添加边距
             margin = 50
             scene_rect.adjust(-margin, -margin, margin, margin)
             self.fitInView(scene_rect, Qt.KeepAspectRatio)
@@ -300,7 +335,7 @@ class TopologyDialog(QDialog):
         layout.addWidget(self.view)
 
         # 设置背景色
-        self.view.setBackgroundBrush(QBrush(QColor("#F5F5F5")))
+        self.view.setBackgroundBrush(QBrush(QColor("#F8F8F8")))
 
     def build_graph(self):
         """从 parser 构建拓扑图"""
@@ -308,8 +343,7 @@ class TopologyDialog(QDialog):
             return
 
         # 构建父子关系图
-        # parent_map[child] = (parent, joint_name, joint_type)
-        parent_map = {}
+        parent_map = {}  # child -> (parent, joint_name, joint_type)
         children_map = {}  # parent -> [(child, joint_name, joint_type), ...]
 
         for joint in self.parser.joints:
@@ -324,7 +358,7 @@ class TopologyDialog(QDialog):
                 children_map[parent] = []
             children_map[parent].append((child, joint_name, joint_type))
 
-        # 找到根节点（没有父节点的 link）
+        # 找到根节点
         all_links = set()
         child_links = set()
 
@@ -338,37 +372,36 @@ class TopologyDialog(QDialog):
         if not root_links:
             return
 
-        # 使用 BFS 计算布局
+        # BFS 计算层级
         level_nodes = {}  # level -> [node_name, ...]
         node_levels = {}  # node_name -> level
-        node_parents = {}  # node_name -> parent_node_name
 
         queue = deque()
         for root in root_links:
-            queue.append((root, 0, None))
+            queue.append((root, 0))
 
         while queue:
-            node, level, parent = queue.popleft()
+            node, level = queue.popleft()
 
             if node in node_levels:
                 continue
 
             node_levels[node] = level
-            node_parents[node] = parent
 
             if level not in level_nodes:
                 level_nodes[level] = []
             level_nodes[level].append(node)
 
-            # 添加子节点
             if node in children_map:
-                for child, joint_name, joint_type in children_map[node]:
+                for child, _, _ in children_map[node]:
                     if child not in node_levels:
-                        queue.append((child, level + 1, node))
+                        queue.append((child, level + 1))
 
-        # 计算每层节点的 X 坐标
+        # 计算每层宽度，用于动态调整 NODE_SPACING
         max_level = max(level_nodes.keys()) if level_nodes else 0
-        positions = {}  # node_name -> (x, y)
+
+        # 计算每个节点的位置
+        positions = {}
 
         for level in range(max_level + 1):
             nodes = level_nodes.get(level, [])
@@ -376,11 +409,12 @@ class TopologyDialog(QDialog):
             if n == 0:
                 continue
 
-            # 计算该层的总宽度
-            total_width = (n - 1) * NODE_SPACING
+            # 动态间距：根据节点数量调整
+            spacing = max(NODE_SPACING, 120)
+            total_width = (n - 1) * spacing
 
             for i, node in enumerate(nodes):
-                x = i * NODE_SPACING - total_width / 2
+                x = i * spacing - total_width / 2
                 y = level * LEVEL_SPACING
                 positions[node] = (x, y)
 
@@ -398,7 +432,7 @@ class TopologyDialog(QDialog):
             parent_item = self.node_items[parent]
             child_item = self.node_items[child]
 
-            # Joint 节点位于连线中点
+            # Joint 位于连线中点
             parent_bottom = parent_item.get_bottom_center()
             child_top = child_item.get_top_center()
 
@@ -409,20 +443,20 @@ class TopologyDialog(QDialog):
             self.scene.addItem(joint_item)
             self.node_items[joint_name] = joint_item
 
-            # 创建连接线：parent -> joint -> child
-            pen = QPen(LINE_COLOR, 2)
+            # 连接线
+            pen = QPen(LINE_COLOR, 1.5)
 
-            # 父节点到关节
+            # 父节点 -> 关节
             line1 = QGraphicsLineItem(
                 parent_bottom.x(), parent_bottom.y(),
                 joint_item.get_top_center().x(), joint_item.get_top_center().y()
             )
             line1.setPen(pen)
-            line1.setZValue(-1)  # 放在节点下方
+            line1.setZValue(-1)
             self.scene.addItem(line1)
             self.line_items.append(line1)
 
-            # 关节到子节点
+            # 关节 -> 子节点
             line2 = QGraphicsLineItem(
                 joint_item.get_bottom_center().x(), joint_item.get_bottom_center().y(),
                 child_top.x(), child_top.y()
@@ -448,15 +482,12 @@ class TopologyDialog(QDialog):
         if not filename:
             return
 
-        # 获取场景边界
         scene_rect = self.scene.itemsBoundingRect()
-        margin = 20
+        margin = 30
         scene_rect.adjust(-margin, -margin, margin, margin)
 
-        # 创建图像
         from PyQt5.QtGui import QImage
 
-        # 计算合适的图像尺寸
         width = int(scene_rect.width())
         height = int(scene_rect.height())
 
@@ -497,9 +528,8 @@ class TopologyDialog(QDialog):
         if not filename:
             return
 
-        # 获取场景边界
         scene_rect = self.scene.itemsBoundingRect()
-        margin = 20
+        margin = 30
         scene_rect.adjust(-margin, -margin, margin, margin)
 
         width = int(scene_rect.width())
@@ -512,7 +542,6 @@ class TopologyDialog(QDialog):
             )
             return
 
-        # 创建 SVG 生成器
         generator = QSvgGenerator()
         generator.setFileName(filename)
         generator.setSize(scene_rect.size().toSize())
