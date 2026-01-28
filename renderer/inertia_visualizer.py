@@ -94,8 +94,8 @@ class InertiaVisualizer:
             T_com = self.compute_transformation(com_rpy, com_xyz)
             T_world = link_frame @ T_com
 
-            # 创建质心标记
-            actor = GeometryFactory.create_com_marker(T_world)
+            # 创建质心标记（带十字的彩色球体）
+            actor = GeometryFactory.create_com_marker_styled(T_world)
             actor.SetVisibility(self.show_com)
 
             self.renderer.AddActor(actor)

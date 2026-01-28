@@ -139,12 +139,9 @@ class AxesManager:
             if joint_type not in ['revolute', 'continuous']:
                 continue
 
-            # 创建关节轴圆柱体
-            actor = GeometryFactory.create_joint_axis_cylinder(
-                joint_frame, axis,
-                axis_length=0.3,
-                radius=0.01,
-                color=(1, 0, 1)  # 洋红色
+            # 创建关节轴（带箭头和圆环）
+            actor = GeometryFactory.create_joint_axis_arrow(
+                joint_frame, axis
             )
             actor.SetVisibility(visible)
 
