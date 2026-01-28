@@ -1,9 +1,88 @@
 import numpy as np
 import math
 import os
+import re
 from anytree import Node, RenderTree
 import transformations as tf
 
+
+def resolve_mesh_uri(uri, base_dir):
+    """解析 ROS 风格的 mesh URI
+
+    支持的格式:
+    - file:///absolute/path → /absolute/path
+    - file:/absolute/path → /absolute/path
+    - package://package_name/path → 尝试解析 ROS 包路径
+    - 相对路径 → 相对于 base_dir
+    - 绝对路径 → 直接使用
+
+    Args:
+        uri: mesh 文件 URI 或路径
+        base_dir: 基础目录（URDF 文件所在目录）
+
+    Returns:
+        解析后的绝对路径
+    """
+    if uri is None:
+        return None
+
+    # 处理 file:// 或 file: 前缀
+    if uri.startswith('file://'):
+        return uri[7:]  # 移除 'file://'
+    elif uri.startswith('file:'):
+        return uri[5:]  # 移除 'file:'
+
+    # 处理 package:// 前缀
+    if uri.startswith('package://'):
+        # 格式: package://package_name/path/to/file
+        # 尝试从 base_dir 向上查找 package.xml
+        package_path = uri[10:]  # 移除 'package://'
+        parts = package_path.split('/', 1)
+        if len(parts) == 2:
+            package_name, relative_path = parts
+
+            # 策略1: 检查 base_dir 是否在某个 ROS 包内
+            # 向上查找 package.xml
+            search_dir = base_dir
+            for _ in range(10):  # 最多向上查找 10 级
+                package_xml = os.path.join(search_dir, 'package.xml')
+                if os.path.exists(package_xml):
+                    # 找到了包，假设 relative_path 相对于包根目录
+                    resolved = os.path.join(search_dir, relative_path)
+                    if os.path.exists(resolved):
+                        return resolved
+                    break
+                parent = os.path.dirname(search_dir)
+                if parent == search_dir:
+                    break
+                search_dir = parent
+
+            # 策略2: 在常见的 ROS 工作空间路径中查找
+            # 检查 base_dir 是否包含 /src/ (ROS 工作空间结构)
+            if '/src/' in base_dir:
+                ws_src = base_dir[:base_dir.rfind('/src/') + 5]
+                # 查找包目录
+                package_dir = os.path.join(ws_src, package_name)
+                if os.path.exists(package_dir):
+                    resolved = os.path.join(package_dir, relative_path)
+                    if os.path.exists(resolved):
+                        return resolved
+
+            # 策略3: 假设 mesh 在 URDF 同目录或子目录
+            resolved = os.path.join(base_dir, relative_path)
+            if os.path.exists(resolved):
+                return resolved
+
+        # 无法解析，返回原始 URI（会导致后续加载失败，但至少有错误信息）
+        print(f"Warning: Cannot resolve package URI: {uri}")
+        return uri
+
+    # 处理绝对路径
+    if os.path.isabs(uri):
+        return uri
+
+    # 相对路径
+    return os.path.normpath(os.path.join(base_dir, uri))
 
 
 class URDFParser:
@@ -410,11 +489,8 @@ class URDFParser:
             vis_geom = None  # Visual geometry info for primitives
 
             if link_info.get("mesh") is not None:
-                # Get mesh file path
-                mesh_file = link_info["mesh"]
-                if not os.path.isabs(mesh_file):
-                    mesh_file = os.path.join(self.mesh_dir, mesh_file)
-                mesh_file = os.path.normpath(mesh_file)
+                # Get mesh file path - resolve URI format
+                mesh_file = resolve_mesh_uri(link_info["mesh"], self.mesh_dir)
 
                 # Apply the link's visual origin transformation
                 T_visual = self.compute_transformation(
@@ -487,11 +563,8 @@ class URDFParser:
                 T_total = T @ T_collision
 
                 if collision_type == 'mesh':
-                    # Mesh file collision
-                    mesh_file = link_info["collision_mesh"]
-                    if not os.path.isabs(mesh_file):
-                        mesh_file = os.path.join(self.mesh_dir, mesh_file)
-                    mesh_file = os.path.normpath(mesh_file)
+                    # Mesh file collision - resolve URI format
+                    mesh_file = resolve_mesh_uri(link_info["collision_mesh"], self.mesh_dir)
                     collision_mesh_files.append(mesh_file)
                     collision_mesh_transformations.append(T_total)
                     collision_link_names.append(name)
