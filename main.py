@@ -1104,10 +1104,12 @@ class URDFViewer(QMainWindow):
         self.joint_values[joint_index] = new_angle
 
         # 同步 slider（阻止信号避免重复更新）
-        slider_val = int(round(new_angle * 100.0))
-        was_blocked = slider.blockSignals(True)
-        slider.setValue(slider_val)
-        slider.blockSignals(was_blocked)
+        if joint_index < len(self.joint_sliders):
+            slider = self.joint_sliders[joint_index]
+            slider_val = int(round(new_angle * 100.0))
+            was_blocked = slider.blockSignals(True)
+            slider.setValue(slider_val)
+            slider.blockSignals(was_blocked)
 
         # 更新标签
         if joint_index < len(self.joint_value_labels):
