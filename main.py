@@ -253,8 +253,6 @@ class URDFViewer(QMainWindow):
         self.visibility_group.setLayout(visibility_layout)
 
         # Add widgets to left panel
-        self.robot_structure_label = QLabel(tr("robot_structure"))
-        left_layout.addWidget(self.robot_structure_label)
         left_layout.addWidget(chain_selection_widget)
         left_layout.addWidget(self.btn_open)
         left_layout.addWidget(self.btn_edit)
@@ -505,7 +503,10 @@ class URDFViewer(QMainWindow):
                 
                 # Store the current URDF file path only after successful loading
                 self.current_urdf_file = filename
-                
+
+                # Apply visibility settings from checkboxes to new models
+                self._apply_visibility_settings()
+
                 # Update the current file label
                 self.update_current_file_label()
 
@@ -628,7 +629,7 @@ class URDFViewer(QMainWindow):
 
         # Add each chain to the combo box
         for i, chain in enumerate(self.chains):
-            self.chain_combo.addItem(tr("chain_pattern", i+1, chain['name']), i)
+            self.chain_combo.addItem(tr("chain_pattern").format(i+1, chain['name']), i)
         
         # Select the first chain by default if available
         if self.chains:
@@ -1475,18 +1476,21 @@ class URDFViewer(QMainWindow):
                 
             self.cb_collision.setChecked(True)
             self.transparency_slider.setValue(100)
-            
+
             # Populate the chain tree
             self.populate_chain_tree()
 
             # Reset camera to show all actors
             # self.renderer.ResetCamera()
             self.vtk_widget.GetRenderWindow().Render()
-            
+
             # Store the temporary file path as the current URDF file
             # This allows further editing and updates
             self.current_urdf_file = temp_path
-            
+
+            # Apply visibility settings from checkboxes to new models
+            self._apply_visibility_settings()
+
             # Update current file label
             self.update_current_file_label()
             
@@ -1503,6 +1507,52 @@ class URDFViewer(QMainWindow):
             self.current_file_label.setText(tr("current_file") + " " + filename)
         else:
             self.current_file_label.setText(tr("current_file") + " " + tr("current_file_none"))
+
+    def _apply_visibility_settings(self):
+        """Apply current checkbox visibility settings to all loaded models.
+
+        Called after loading a new model or updating from XML to ensure
+        the displayed state matches the checkbox state.
+        """
+        # Visual models
+        visual_visible = self.cb_visual.isChecked()
+        for model in self.models:
+            model.actor.SetVisibility(visual_visible)
+
+        # Collision models
+        collision_visible = self.cb_collision.isChecked()
+        for model in self.models_collision:
+            model.actor.SetVisibility(collision_visible)
+            if model.axes_actor is not None:
+                model.axes_actor.SetVisibility(collision_visible)
+            if hasattr(model, 'text_actor') and model.text_actor is not None:
+                model.text_actor.SetVisibility(collision_visible)
+
+        # Link frames (axes + text on visual models)
+        frames_visible = self.cb_link_frames.isChecked()
+        for model in self.models:
+            if model.axes_actor is not None:
+                model.axes_actor.SetVisibility(frames_visible)
+            if hasattr(model, 'text_actor') and model.text_actor is not None:
+                model.text_actor.SetVisibility(frames_visible)
+
+        # Joint axes - recreate if checked
+        if self.cb_joint_axes.isChecked() and self.current_urdf_file:
+            self.create_joint_axes()
+
+        # CoM markers - recreate if checked
+        if self.cb_com.isChecked() and self.current_urdf_file:
+            parser = self._create_parser(self.current_urdf_file)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            self.inertia_visualizer.create_com_markers(parser, link_names, link_frames)
+
+        # Inertia boxes - recreate if checked
+        if self.cb_inertia.isChecked() and self.current_urdf_file:
+            parser = self._create_parser(self.current_urdf_file)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
+
+        self.vtk_widget.GetRenderWindow().Render()
             
     def decompose_collision_meshes(self):
         """Handle decomposition of collision meshes"""

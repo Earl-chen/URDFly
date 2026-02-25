@@ -7,8 +7,6 @@
 支持缩放、平移、点击交互和 PNG/SVG 导出。
 """
 
-from collections import deque
-
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QGraphicsView, QGraphicsScene,
     QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsLineItem,
@@ -45,7 +43,7 @@ JOINT_SELECTED_COLOR = QColor("#FFD700")  # 金色高亮
 LINE_COLOR = QColor("#888888")
 
 # 布局参数
-LEVEL_SPACING = 100  # 层级间距（Y方向）
+LEVEL_SPACING = 120  # 层级间距（Y方向）
 NODE_SPACING = 150   # 同层节点间距（X方向）
 LINK_HEIGHT = 28
 LINK_PADDING = 16    # 文字左右内边距
@@ -132,7 +130,7 @@ class LinkNode(QGraphicsRectItem):
 
 
 class JointNode(QGraphicsItem):
-    """关节节点 - 小圆点 + 右侧文字标签"""
+    """关节节点 - 小圆点 + 下方文字标签"""
 
     def __init__(self, name, joint_type, x, y, radius=JOINT_RADIUS):
         super().__init__()
@@ -150,10 +148,10 @@ class JointNode(QGraphicsItem):
         self.text_width = fm.horizontalAdvance(name)
         self.text_height = fm.height()
 
-        # 计算包围盒：圆 + 间隙 + 文字
-        self.gap = 6  # 圆和文字之间的间隙
-        self.total_width = radius * 2 + self.gap + self.text_width
-        self.total_height = max(radius * 2, self.text_height)
+        # 计算包围盒：圆在上，文字在下
+        self.gap = 4  # 圆底部和文字之间的间隙
+        self.total_width = max(radius * 2, self.text_width)
+        self.total_height = radius * 2 + self.gap + self.text_height
 
         # 设置位置（以圆心为锚点）
         self.setPos(x, y)
@@ -168,10 +166,9 @@ class JointNode(QGraphicsItem):
 
     def boundingRect(self):
         """返回边界矩形"""
-        # 包含圆和文字的区域
         return QRectF(
+            -self.total_width / 2 - 2,
             -self.radius - 2,
-            -self.total_height / 2 - 2,
             self.total_width + 4,
             self.total_height + 4
         )
@@ -196,11 +193,11 @@ class JointNode(QGraphicsItem):
             self.radius, self.radius
         )
 
-        # 绘制文字（圆的右侧）
+        # 绘制文字（圆的下方，水平居中）
         painter.setFont(self.font)
         painter.setPen(QPen(QColor("#555555")))
-        text_x = self.radius + self.gap
-        text_y = self.text_height / 4  # 垂直居中微调
+        text_x = -self.text_width / 2
+        text_y = self.radius + self.gap + self.text_height * 0.8
         painter.drawText(QPointF(text_x, text_y), self.name)
 
     def get_center(self):
@@ -338,12 +335,11 @@ class TopologyDialog(QDialog):
         self.view.setBackgroundBrush(QBrush(QColor("#F8F8F8")))
 
     def build_graph(self):
-        """从 parser 构建拓扑图"""
+        """从 parser 构建拓扑图（子树宽度优先布局）"""
         if not hasattr(self.parser, 'joints') or not self.parser.joints:
             return
 
         # 构建父子关系图
-        parent_map = {}  # child -> (parent, joint_name, joint_type)
         children_map = {}  # parent -> [(child, joint_name, joint_type), ...]
 
         for joint in self.parser.joints:
@@ -351,8 +347,6 @@ class TopologyDialog(QDialog):
             child = joint['child']
             joint_name = joint['name']
             joint_type = joint['type']
-
-            parent_map[child] = (parent, joint_name, joint_type)
 
             if parent not in children_map:
                 children_map[parent] = []
@@ -367,104 +361,119 @@ class TopologyDialog(QDialog):
             all_links.add(joint['child'])
             child_links.add(joint['child'])
 
-        root_links = all_links - child_links
+        root_links = sorted(all_links - child_links)
 
         if not root_links:
             return
 
-        # BFS 计算层级
-        level_nodes = {}  # level -> [node_name, ...]
-        node_levels = {}  # node_name -> level
+        # 递归计算每个子树所需宽度
+        subtree_widths = {}
 
-        queue = deque()
+        def compute_subtree_width(link):
+            if link not in children_map or not children_map[link]:
+                subtree_widths[link] = NODE_SPACING
+                return NODE_SPACING
+            total = 0
+            for child, _, _ in children_map[link]:
+                total += compute_subtree_width(child)
+            subtree_widths[link] = max(total, NODE_SPACING)
+            return subtree_widths[link]
+
+        total_root_width = 0
         for root in root_links:
-            queue.append((root, 0))
+            total_root_width += compute_subtree_width(root)
 
-        while queue:
-            node, level = queue.popleft()
+        # 自顶向下分配 x, y 坐标
+        link_positions = {}  # link_name -> (x, y)
 
-            if node in node_levels:
-                continue
+        def assign_positions(link, x_center, level):
+            link_positions[link] = (x_center, level * LEVEL_SPACING)
 
-            node_levels[node] = level
+            if link not in children_map:
+                return
 
-            if level not in level_nodes:
-                level_nodes[level] = []
-            level_nodes[level].append(node)
+            children = children_map[link]
+            total_width = subtree_widths[link]
+            x_start = x_center - total_width / 2
 
-            if node in children_map:
-                for child, _, _ in children_map[node]:
-                    if child not in node_levels:
-                        queue.append((child, level + 1))
+            for child, _, _ in children:
+                child_width = subtree_widths[child]
+                child_x = x_start + child_width / 2
+                assign_positions(child, child_x, level + 1)
+                x_start += child_width
 
-        # 计算每层宽度，用于动态调整 NODE_SPACING
-        max_level = max(level_nodes.keys()) if level_nodes else 0
-
-        # 计算每个节点的位置
-        positions = {}
-
-        for level in range(max_level + 1):
-            nodes = level_nodes.get(level, [])
-            n = len(nodes)
-            if n == 0:
-                continue
-
-            # 动态间距：根据节点数量调整
-            spacing = max(NODE_SPACING, 120)
-            total_width = (n - 1) * spacing
-
-            for i, node in enumerate(nodes):
-                x = i * spacing - total_width / 2
-                y = level * LEVEL_SPACING
-                positions[node] = (x, y)
+        # 为所有根节点分配位置
+        x_offset = -total_root_width / 2
+        for root in root_links:
+            w = subtree_widths[root]
+            assign_positions(root, x_offset + w / 2, 0)
+            x_offset += w
 
         # 创建 Link 节点
-        for name, (x, y) in positions.items():
+        for name, (x, y) in link_positions.items():
             link_item = LinkNode(name, x, y)
             self.scene.addItem(link_item)
             self.node_items[name] = link_item
 
-        # 创建 Joint 节点和连接线
-        for child, (parent, joint_name, joint_type) in parent_map.items():
-            if parent not in self.node_items or child not in self.node_items:
+        # 创建 Joint 节点和 L 形连接线
+        pen = QPen(LINE_COLOR, 1.5)
+
+        for parent_link, children in children_map.items():
+            if parent_link not in self.node_items:
                 continue
 
-            parent_item = self.node_items[parent]
-            child_item = self.node_items[child]
-
-            # Joint 位于连线中点
+            parent_item = self.node_items[parent_link]
             parent_bottom = parent_item.get_bottom_center()
-            child_top = child_item.get_top_center()
 
-            joint_x = (parent_bottom.x() + child_top.x()) / 2
-            joint_y = (parent_bottom.y() + child_top.y()) / 2
+            for child_link, joint_name, joint_type in children:
+                if child_link not in self.node_items:
+                    continue
 
-            joint_item = JointNode(joint_name, joint_type, joint_x, joint_y)
-            self.scene.addItem(joint_item)
-            self.node_items[joint_name] = joint_item
+                child_item = self.node_items[child_link]
+                child_top = child_item.get_top_center()
 
-            # 连接线
-            pen = QPen(LINE_COLOR, 1.5)
+                # Joint 位置：x 对齐 child，y 在 parent 和 child 中间
+                joint_x = child_top.x()
+                joint_y = (parent_bottom.y() + child_top.y()) / 2
 
-            # 父节点 -> 关节
-            line1 = QGraphicsLineItem(
-                parent_bottom.x(), parent_bottom.y(),
-                joint_item.get_top_center().x(), joint_item.get_top_center().y()
-            )
-            line1.setPen(pen)
-            line1.setZValue(-1)
-            self.scene.addItem(line1)
-            self.line_items.append(line1)
+                joint_item = JointNode(joint_name, joint_type, joint_x, joint_y)
+                self.scene.addItem(joint_item)
+                self.node_items[joint_name] = joint_item
 
-            # 关节 -> 子节点
-            line2 = QGraphicsLineItem(
-                joint_item.get_bottom_center().x(), joint_item.get_bottom_center().y(),
-                child_top.x(), child_top.y()
-            )
-            line2.setPen(pen)
-            line2.setZValue(-1)
-            self.scene.addItem(line2)
-            self.line_items.append(line2)
+                joint_top = joint_item.get_top_center()
+                joint_bottom = joint_item.get_bottom_center()
+
+                # L 形连线：parent → 垂直下 → 水平拐弯 → joint → 垂直下 → child
+                # 第 1 段：parent 底部垂直向下到 joint 的 y 水平线
+                line_v1 = QGraphicsLineItem(
+                    parent_bottom.x(), parent_bottom.y(),
+                    parent_bottom.x(), joint_top.y()
+                )
+                line_v1.setPen(pen)
+                line_v1.setZValue(-1)
+                self.scene.addItem(line_v1)
+                self.line_items.append(line_v1)
+
+                # 第 2 段：水平连到 joint（仅当 parent_x != child_x 时）
+                if abs(parent_bottom.x() - joint_top.x()) > 1:
+                    line_h = QGraphicsLineItem(
+                        parent_bottom.x(), joint_top.y(),
+                        joint_top.x(), joint_top.y()
+                    )
+                    line_h.setPen(pen)
+                    line_h.setZValue(-1)
+                    self.scene.addItem(line_h)
+                    self.line_items.append(line_h)
+
+                # 第 3 段：joint 底部到 child 顶部
+                line_v2 = QGraphicsLineItem(
+                    joint_bottom.x(), joint_bottom.y(),
+                    child_top.x(), child_top.y()
+                )
+                line_v2.setPen(pen)
+                line_v2.setZValue(-1)
+                self.scene.addItem(line_v2)
+                self.line_items.append(line_v2)
 
         # 适应视图
         self.view.fit_in_view()
