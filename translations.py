@@ -32,6 +32,7 @@ TRANSLATIONS = {
     "show_link_frames": {"zh_CN": "显示连杆坐标系", "en": "Show Link Frames"},
     "show_mdh_frames": {"zh_CN": "显示 MDH 坐标系", "en": "Show MDH Frames"},
     "show_collision": {"zh_CN": "显示碰撞体", "en": "Show Collision"},
+    "show_joint_axes": {"zh_CN": "显示关节轴", "en": "Show Joint Axes"},
 
     # === 关节控制 ===
     "joints_control": {"zh_CN": "关节控制", "en": "Joints Control"},

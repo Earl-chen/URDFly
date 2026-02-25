@@ -47,6 +47,7 @@ from urdf_parser import URDFParser
 from urdf_vtk_model import URDFModel
 from simplify_mesh import create_detailed_approximation
 from translations import TranslationManager, tr, get_translation_manager
+from geometry_factory import GeometryFactory
 
 
 class DragDropVTKWidget(QVTKRenderWindowInteractor):
@@ -95,6 +96,8 @@ class URDFViewer(QMainWindow):
         self.chains = []  # List to store kinematic chains
         self.mdh_frames_actors = []  # List to store MDH frame actors
         self.mdh_text_actors = []  # List to store MDH frame text actors
+        self.joint_axis_actors = []  # List to store joint axis actors
+        self.joint_axis_info = []  # List to store joint axis info
         self.selected_chain = None  # Currently selected chain
         self.selected_chain_index = 0  # Index of the currently selected chain
         self.current_urdf_file = None  # Path to the currently loaded URDF file
@@ -208,10 +211,15 @@ class URDFViewer(QMainWindow):
         self.cb_collision = QCheckBox(tr("show_collision"))
         self.cb_collision.setChecked(True)
         self.cb_collision.stateChanged.connect(self.toggle_collision)
-        
+
+        self.cb_joint_axes = QCheckBox(tr("show_joint_axes"))
+        self.cb_joint_axes.setChecked(False)
+        self.cb_joint_axes.stateChanged.connect(self.toggle_joint_axes)
+
         visibility_layout.addWidget(self.cb_link_frames)
         visibility_layout.addWidget(self.cb_mdh_frames)
         visibility_layout.addWidget(self.cb_collision)
+        visibility_layout.addWidget(self.cb_joint_axes)
 
         self.visibility_group.setLayout(visibility_layout)
 
@@ -510,7 +518,13 @@ class URDFViewer(QMainWindow):
         for text_actor in self.mdh_text_actors:
             self.renderer.RemoveActor(text_actor)
         self.mdh_text_actors = []
-        
+
+        # Clear joint axes
+        for actor in self.joint_axis_actors:
+            self.renderer.RemoveActor(actor)
+        self.joint_axis_actors = []
+        self.joint_axis_info = []
+
         # Reset selected chain and current URDF file
         self.selected_chain = None
         self.current_urdf_file = None
@@ -641,7 +655,69 @@ class URDFViewer(QMainWindow):
                 actor.SetVisibility(False)
             for text_actor in self.mdh_text_actors:
                 text_actor.SetVisibility(False)
-        
+
+        # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
+    def toggle_joint_axes(self, state):
+        """Toggle visibility of joint axes"""
+        visible = state == Qt.Checked
+
+        # If we want to show joint axes
+        if visible:
+            if not self.current_urdf_file:
+                QMessageBox.warning(
+                    self, tr("warning"), tr("please_load_urdf_mdh")
+                )
+                self.cb_joint_axes.setChecked(False)
+                return
+
+            # Create joint axes
+            self.create_joint_axes()
+        else:
+            # Hide joint axes
+            for actor in self.joint_axis_actors:
+                actor.SetVisibility(False)
+
+        # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
+    def create_joint_axes(self):
+        """Create joint axis actors for the current URDF"""
+        # Clear existing joint axes
+        for actor in self.joint_axis_actors:
+            self.renderer.RemoveActor(actor)
+        self.joint_axis_actors = []
+        self.joint_axis_info = []
+
+        # Create a fresh parser instance
+        parser = URDFParser(self.current_urdf_file)
+
+        # Get robot info to access joint data
+        (_, _, _, _, _,
+         joint_names, joint_frames, joint_types, joint_axes, _, _, _, _) = parser.get_robot_info()
+
+        # Create axis arrows for each revolute and continuous joint
+        for joint_name, joint_frame, joint_type, axis in zip(
+            joint_names, joint_frames, joint_types, joint_axes
+        ):
+            # Only create axes for revolute and continuous joints
+            if joint_type not in ['revolute', 'continuous']:
+                continue
+
+            # Create joint axis arrow
+            actor = GeometryFactory.create_joint_axis_arrow(
+                joint_frame, axis
+            )
+            actor.SetVisibility(self.cb_joint_axes.isChecked())
+
+            self.renderer.AddActor(actor)
+            self.joint_axis_actors.append(actor)
+            self.joint_axis_info.append({
+                'joint_name': joint_name,
+                'axis': list(axis)
+            })
+
         # Update the rendering
         self.vtk_widget.GetRenderWindow().Render()
 
@@ -1048,7 +1124,11 @@ class URDFViewer(QMainWindow):
         # Update MDH frames if they are visible
         if hasattr(self, 'cb_mdh_frames') and self.cb_mdh_frames.isChecked() and self.selected_chain:
             self.create_mdh_frames(self.selected_chain)
-        
+
+        # Update joint axes if they are visible
+        if hasattr(self, 'cb_joint_axes') and self.cb_joint_axes.isChecked():
+            self.create_joint_axes()
+
         # Update the rendering
         self.vtk_widget.GetRenderWindow().Render()
     
