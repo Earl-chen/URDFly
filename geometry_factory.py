@@ -29,6 +29,181 @@ class GeometryFactory:
     """几何体创建工厂类"""
 
     @staticmethod
+    def create_box(size, color=None, opacity=1.0):
+        """创建长方体几何体
+
+        Args:
+            size: (x, y, z) 尺寸
+            color: (r, g, b) 颜色，0-1 范围
+            opacity: 透明度，0-1 范围
+
+        Returns:
+            vtkActor
+        """
+        cube = vtk.vtkCubeSource()
+        cube.SetXLength(size[0])
+        cube.SetYLength(size[1])
+        cube.SetZLength(size[2])
+        cube.Update()
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(cube.GetOutputPort())
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+
+        if color:
+            actor.GetProperty().SetColor(color[0], color[1], color[2])
+        actor.GetProperty().SetOpacity(opacity)
+
+        return actor
+
+    @staticmethod
+    def create_sphere(radius, color=None, opacity=1.0, resolution=24):
+        """创建球体几何体
+
+        Args:
+            radius: 半径
+            color: (r, g, b) 颜色
+            opacity: 透明度
+            resolution: 分辨率
+
+        Returns:
+            vtkActor
+        """
+        sphere = vtk.vtkSphereSource()
+        sphere.SetRadius(radius)
+        sphere.SetPhiResolution(resolution)
+        sphere.SetThetaResolution(resolution)
+        sphere.Update()
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(sphere.GetOutputPort())
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+
+        if color:
+            actor.GetProperty().SetColor(color[0], color[1], color[2])
+        actor.GetProperty().SetOpacity(opacity)
+
+        return actor
+
+    @staticmethod
+    def create_cylinder(radius, length, color=None, opacity=1.0, resolution=24):
+        """创建圆柱体几何体
+
+        Args:
+            radius: 半径
+            length: 长度（全长）
+            color: (r, g, b) 颜色
+            opacity: 透明度
+            resolution: 分辨率
+
+        Returns:
+            vtkActor
+        """
+        cylinder = vtk.vtkCylinderSource()
+        cylinder.SetRadius(radius)
+        cylinder.SetHeight(length)
+        cylinder.SetResolution(resolution)
+        cylinder.Update()
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(cylinder.GetOutputPort())
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+
+        if color:
+            actor.GetProperty().SetColor(color[0], color[1], color[2])
+        actor.GetProperty().SetOpacity(opacity)
+
+        return actor
+
+    @staticmethod
+    def apply_transform(actor, transform_matrix):
+        """应用变换矩阵到 actor
+
+        Args:
+            actor: VTK actor
+            transform_matrix: 4x4 numpy 变换矩阵
+        """
+        vtk_transform = vtk.vtkTransform()
+        vtk_transform.SetMatrix(transform_matrix.flatten())
+        actor.SetUserTransform(vtk_transform)
+
+    @staticmethod
+    def apply_color_and_opacity(actor, color, opacity=1.0):
+        """应用颜色和透明度到 actor
+
+        Args:
+            actor: VTK actor
+            color: (r, g, b) 或 (r, g, b, a) 颜色
+            opacity: 透明度（如果 color 没有 alpha 分量）
+        """
+        if color:
+            actor.GetProperty().SetColor(color[0], color[1], color[2])
+            if len(color) > 3:
+                actor.GetProperty().SetOpacity(color[3])
+            else:
+                actor.GetProperty().SetOpacity(opacity)
+
+    @staticmethod
+    def create_com_marker_styled(transform_matrix, radius=0.012):
+        """创建质心标记（双层球体风格）
+
+        简洁的双层设计：
+        - 外层：橙色半透明球体
+        - 内核：白色小实心球
+
+        Args:
+            transform_matrix: 4x4 变换矩阵
+            radius: 外层球体半径
+
+        Returns:
+            vtkAssembly: 组合 actor
+        """
+        assembly = vtk.vtkAssembly()
+
+        # 1. 外层球体 - 橙色半透明
+        outer_sphere = GeometryFactory.create_sphere(
+            radius, color=(1.0, 0.5, 0.0), opacity=0.6, resolution=16
+        )
+        assembly.AddPart(outer_sphere)
+
+        # 2. 内核 - 白色小实心球
+        inner_sphere = GeometryFactory.create_sphere(
+            radius * 0.4, color=(1.0, 1.0, 1.0), opacity=1.0, resolution=12
+        )
+        assembly.AddPart(inner_sphere)
+
+        # 应用世界坐标变换
+        vtk_transform = vtk.vtkTransform()
+        vtk_transform.SetMatrix(transform_matrix.flatten())
+        assembly.SetUserTransform(vtk_transform)
+
+        return assembly
+
+    @staticmethod
+    def create_inertia_box(box_size, transform_matrix,
+                           color=(0.3, 0.6, 1.0), opacity=0.4):
+        """创建惯量盒
+
+        Args:
+            box_size: (x, y, z) 尺寸
+            transform_matrix: 4x4 变换矩阵
+            color: 颜色
+            opacity: 透明度
+
+        Returns:
+            vtkActor
+        """
+        actor = GeometryFactory.create_box(box_size, color, opacity)
+        GeometryFactory.apply_transform(actor, transform_matrix)
+        return actor
+
+    @staticmethod
     def create_joint_axis_arrow(joint_frame, joint_axis_local,
                                 axis_length=0.06, radius=0.004):
         """创建带箭头和圆环的关节轴
