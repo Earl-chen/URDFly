@@ -152,6 +152,18 @@ TRANSLATIONS = {
     # === 表头 ===
     "theta_rad": {"zh_CN": "θ (rad)", "en": "θ (rad)"},
     "alpha_rad": {"zh_CN": "α (rad)", "en": "α (rad)"},
+
+    # === 拓扑图 ===
+    "show_topology": {"zh_CN": "显示拓扑图", "en": "Show Topology"},
+    "topology_title": {"zh_CN": "机器人拓扑图", "en": "Robot Topology"},
+    "fit_view": {"zh_CN": "适应窗口", "en": "Fit View"},
+    "export_png": {"zh_CN": "导出 PNG", "en": "Export PNG"},
+    "export_svg": {"zh_CN": "导出 SVG", "en": "Export SVG"},
+    "btn_close": {"zh_CN": "关闭", "en": "Close"},
+    "export_success": {"zh_CN": "已导出到: {}", "en": "Exported to: {}"},
+    "export_failed": {"zh_CN": "导出失败。", "en": "Export failed."},
+    "export_empty_scene": {"zh_CN": "场景为空，无法导出。", "en": "Scene is empty, cannot export."},
+    "load_urdf_topology": {"zh_CN": "请先加载 URDF 文件。[拓扑图]", "en": "Please load a URDF file first [Topology]"},
 }
 
 
@@ -241,6 +253,8 @@ class TranslationManager:
             main_window.btn_decomp.setText(self.tr("decompose_collision"))
         if hasattr(main_window, 'btn_set_joints'):
             main_window.btn_set_joints.setText(self.tr("set_joints"))
+        if hasattr(main_window, 'btn_topology'):
+            main_window.btn_topology.setText(self.tr("show_topology"))
 
         # 更新透明度标签
         if hasattr(main_window, 'transparency_label'):

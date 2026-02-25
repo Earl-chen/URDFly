@@ -48,6 +48,7 @@ from urdf_vtk_model import URDFModel
 from simplify_mesh import create_detailed_approximation
 from translations import TranslationManager, tr, get_translation_manager
 from geometry_factory import GeometryFactory
+from topology_dialog import TopologyDialog
 
 
 class DragDropVTKWidget(QVTKRenderWindowInteractor):
@@ -178,6 +179,9 @@ class URDFViewer(QMainWindow):
         self.btn_set_joints = QPushButton(tr("set_joints"))
         self.btn_set_joints.clicked.connect(self.open_set_joints_dialog)
 
+        self.btn_topology = QPushButton(tr("show_topology"))
+        self.btn_topology.clicked.connect(self.show_topology_graph)
+
         # Create transparency controls
         transparency_group = QGroupBox("")
         transparency_layout = QVBoxLayout()
@@ -232,6 +236,7 @@ class URDFViewer(QMainWindow):
         left_layout.addWidget(self.btn_mdh)
         left_layout.addWidget(self.btn_decomp)
         left_layout.addWidget(self.btn_set_joints)
+        left_layout.addWidget(self.btn_topology)
 
         left_layout.addWidget(transparency_group)
         left_layout.addWidget(self.visibility_group)
@@ -923,6 +928,18 @@ class URDFViewer(QMainWindow):
         
         btn_apply.clicked.connect(parse_and_apply)
         btn_cancel.clicked.connect(dialog.reject)
+        dialog.exec_()
+
+    def show_topology_graph(self):
+        """Show the robot topology graph dialog"""
+        if not self.current_urdf_file:
+            QMessageBox.warning(
+                self, tr("warning"), tr("load_urdf_topology")
+            )
+            return
+
+        parser = URDFParser(self.current_urdf_file)
+        dialog = TopologyDialog(self, parser, self.translation_manager)
         dialog.exec_()
 
     def apply_transparency(self):
