@@ -214,6 +214,10 @@ class URDFViewer(QMainWindow):
         self.visibility_group = QGroupBox(tr("visibility_settings"))
         visibility_layout = QVBoxLayout()
 
+        self.cb_visual = QCheckBox(tr("show_visual"))
+        self.cb_visual.setChecked(True)
+        self.cb_visual.stateChanged.connect(self.toggle_visual)
+
         self.cb_link_frames = QCheckBox(tr("show_link_frames"))
         self.cb_link_frames.setChecked(True)
         self.cb_link_frames.stateChanged.connect(self.toggle_link_frames)
@@ -238,6 +242,7 @@ class URDFViewer(QMainWindow):
         self.cb_inertia.setChecked(False)
         self.cb_inertia.stateChanged.connect(self.toggle_inertia)
 
+        visibility_layout.addWidget(self.cb_visual)
         visibility_layout.addWidget(self.cb_link_frames)
         visibility_layout.addWidget(self.cb_mdh_frames)
         visibility_layout.addWidget(self.cb_collision)
@@ -359,6 +364,8 @@ class URDFViewer(QMainWindow):
             get_link_name=self._get_link_name_by_actor,
             get_joint_for_link=self._get_joint_for_child_link,
             on_joint_drag=self._on_joint_drag,
+            on_drag_start=self._on_drag_start,
+            on_drag_end=self._on_drag_end,
         )
         self.interactor.SetInteractorStyle(self.interaction_style)
 
@@ -399,6 +406,16 @@ class URDFViewer(QMainWindow):
         if ext == '.urdf':
             return URDFParser(filename)
         elif ext == '.xml':
+            # 验证是否为有效的 MJCF 文件
+            try:
+                from xml.etree import ElementTree as ET
+                tree = ET.parse(filename)
+                root = tree.getroot()
+                if root.tag != 'mujoco':
+                    raise ValueError(tr("invalid_mjcf_file"))
+            except ET.ParseError as e:
+                raise ValueError(tr("invalid_mjcf_file"))
+
             if not HAS_MJCF:
                 raise ImportError("MJCF 支持需要安装 mujoco: pip install mujoco")
             return MJCFParser(filename)
@@ -429,18 +446,22 @@ class URDFViewer(QMainWindow):
                 joint_child_links,
                 collision_mesh_files,
                 collision_mesh_transformations,
+                joint_limits,
                 ) = parser.get_robot_info()
-                
+
                 # Store revolute joints for slider controls
                 self.revolute_joints = []
                 for i, joint_type in enumerate(joint_types):
                     if joint_type == 'revolute':
+                        limit = joint_limits[i]
                         self.revolute_joints.append({
                             'name': joint_names[i],
                             'index': i,
                             'parent': joint_parent_links[i],
                             'child': joint_child_links[i],
-                            'axis': joint_axes[i]
+                            'axis': joint_axes[i],
+                            'lower': limit['lower'],
+                            'upper': limit['upper'],
                         })
                 
                 # Create joint sliders
@@ -496,7 +517,7 @@ class URDFViewer(QMainWindow):
     def open_urdf_file(self):
         """Open a URDF file dialog and load the selected file"""
         filename, _ = QFileDialog.getOpenFileName(
-            self, tr("dialog_open_urdf"), "", tr("dialog_urdf_filter")
+            self, tr("dialog_open_robot"), "", tr("dialog_robot_filter")
         )
         
         if filename:
@@ -667,6 +688,16 @@ class URDFViewer(QMainWindow):
         # Update the rendering
         self.vtk_widget.GetRenderWindow().Render()
         
+    def toggle_visual(self, state):
+        """Toggle visibility of visual models"""
+        visible = state == Qt.Checked
+
+        for model in self.models:
+            model.actor.SetVisibility(visible)
+
+        # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
     def toggle_collision(self, state):
         visible = state == Qt.Checked
         
@@ -760,7 +791,7 @@ class URDFViewer(QMainWindow):
 
         # Get robot info to access joint data
         (_, _, _, _, _,
-         joint_names, joint_frames, joint_types, joint_axes, _, _, _, _) = parser.get_robot_info()
+         joint_names, joint_frames, joint_types, joint_axes, _, _, _, _, _) = parser.get_robot_info()
 
         # Create axis arrows for each revolute and continuous joint
         for joint_name, joint_frame, joint_type, axis in zip(
@@ -800,7 +831,7 @@ class URDFViewer(QMainWindow):
 
             # Create CoM markers
             parser = self._create_parser(self.current_urdf_file)
-            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_com_markers(parser, link_names, link_frames)
 
         self.inertia_visualizer.set_com_visibility(visible)
@@ -820,7 +851,7 @@ class URDFViewer(QMainWindow):
 
             # Create inertia boxes
             parser = self._create_parser(self.current_urdf_file)
-            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
 
         self.inertia_visualizer.set_inertia_visibility(visible)
@@ -921,6 +952,13 @@ class URDFViewer(QMainWindow):
         if not self.current_urdf_file:
             QMessageBox.warning(
                 self, tr("warning"), tr("please_load_urdf_show_mdh")
+            )
+            return
+
+        # MDH 仅支持 URDF 文件
+        if not self.current_urdf_file.lower().endswith('.urdf'):
+            QMessageBox.warning(
+                self, tr("warning"), tr("mdh_urdf_only")
             )
             return
         
@@ -1050,14 +1088,16 @@ class URDFViewer(QMainWindow):
         if joint_index < 0 or joint_index >= len(self.joint_values):
             return
 
+        # 获取关节限位
+        joint_info = self.revolute_joints[joint_index]
+        lower = joint_info['lower']
+        upper = joint_info['upper']
+
         # 更新角度
         new_angle = self.joint_values[joint_index] + delta_angle
 
-        # 限制在 slider 范围内
-        slider = self.joint_sliders[joint_index]
-        min_rad = slider.minimum() / 100.0
-        max_rad = slider.maximum() / 100.0
-        new_angle = max(min_rad, min(max_rad, new_angle))
+        # 限制在关节限位范围内
+        new_angle = max(lower, min(upper, new_angle))
 
         # 更新值
         self.joint_values[joint_index] = new_angle
@@ -1074,6 +1114,20 @@ class URDFViewer(QMainWindow):
 
         # 更新模型
         self.update_model_with_joint_angles()
+
+    def _on_drag_start(self, link_name):
+        """拖拽开始回调 - 高亮显示被拖拽的 link"""
+        for model in self.models:
+            if model.name == link_name:
+                model.highlight()
+                break
+        self.vtk_widget.GetRenderWindow().Render()
+
+    def _on_drag_end(self, link_name):
+        """拖拽结束回调 - 取消高亮显示"""
+        for model in self.models:
+            model.unhighlight()
+        self.vtk_widget.GetRenderWindow().Render()
 
     def show_topology_graph(self):
         """Show the robot topology graph dialog"""
@@ -1103,46 +1157,75 @@ class URDFViewer(QMainWindow):
         """Create sliders for controlling joint angles"""
         # Clear existing sliders
         self.clear_joint_sliders()
-        
+
         # Initialize joint values array with zeros
         self.joint_values = [0.0] * len(self.revolute_joints)
         self.joint_value_labels = []
-        
+
         # Create a slider for each revolute joint
         for i, joint in enumerate(self.revolute_joints):
+            # Get joint limits
+            lower = joint.get('lower', -math.pi)
+            upper = joint.get('upper', math.pi)
+
             # Create a group for this joint
             joint_box = QGroupBox(joint['name'])
             joint_box_layout = QVBoxLayout(joint_box)
-            
-            # Create a horizontal layout for slider and value label
+
+            # Range label
+            range_val = upper - lower
+            range_text = tr("range_label", None, f"{lower:.2f}", f"{upper:.2f}")
+            range_label = QLabel(range_text)
+            range_label.setAlignment(Qt.AlignCenter)
+            joint_box_layout.addWidget(range_label)
+
+            # Create a horizontal layout for min label, slider and max label
             slider_layout = QHBoxLayout()
-            
+
+            # Min value label
+            min_label = QLabel(f"{lower:.2f}")
+            min_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            slider_layout.addWidget(min_label)
+
             # Create a slider
             slider = QSlider(Qt.Horizontal)
-            slider.setMinimum(-314)  # -π in hundredths
-            slider.setMaximum(314)   # π in hundredths
+            slider.setMinimum(int(round(lower * 100)))
+            slider.setMaximum(int(round(upper * 100)))
             slider.setValue(0)       # Default to 0
             slider.setTickPosition(QSlider.TicksBelow)
-            slider.setTickInterval(157)  # π/2 in hundredths
-            
+
+            # Adaptive tick interval based on range
+            if range_val > math.pi:
+                tick_interval = int(round(math.pi / 2 * 100))  # π/2
+            elif range_val > math.pi / 2:
+                tick_interval = int(round(math.pi / 4 * 100))  # π/4
+            else:
+                tick_interval = max(1, int(round(range_val / 4 * 100)))
+            slider.setTickInterval(tick_interval)
+
             # Create a label to show the current value
             value_label = QLabel(self.format_angle(0.0))
-            value_label.setMinimumWidth(40)  # Set minimum width to ensure consistent alignment
+            value_label.setMinimumWidth(60)  # Set minimum width to ensure consistent alignment
             value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # Right-align the text
-            
+
+            # Max value label
+            max_label = QLabel(f"{upper:.2f}")
+            max_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
             # Connect the slider to update function
             slider.valueChanged.connect(lambda val, idx=i, label=value_label: self.update_joint_angle(val, idx, label))
-            
+
             # Add slider and label to the horizontal layout
             slider_layout.addWidget(slider, 1)  # Give slider a stretch factor of 1
+            slider_layout.addWidget(max_label)
             slider_layout.addWidget(value_label)
-            
+
             # Add the horizontal layout to the joint box
             joint_box_layout.addLayout(slider_layout)
-            
+
             # Add the joint box to the joint layout
             self.joint_layout.addWidget(joint_box)
-            
+
             # Store the slider for later access
             self.joint_sliders.append(slider)
             self.joint_value_labels.append(value_label)
@@ -1242,6 +1325,7 @@ class URDFViewer(QMainWindow):
         joint_child_links,
         collision_mesh_files,
         collision_mesh_transformations,
+        joint_limits,
         ) = parser.get_robot_info(qs=self.joint_values)
         
         # Update existing models with new transformations
@@ -1344,18 +1428,22 @@ class URDFViewer(QMainWindow):
             joint_parent_links,
             joint_child_links,
             collision_mesh_files,
-            collision_mesh_transformations,) = parser.get_robot_info()
-            
+            collision_mesh_transformations,
+            joint_limits,) = parser.get_robot_info()
+
             # Store revolute joints for slider controls
             self.revolute_joints = []
             for i, joint_type in enumerate(joint_types):
                 if joint_type == 'revolute':
+                    limit = joint_limits[i]
                     self.revolute_joints.append({
                         'name': joint_names[i],
                         'index': i,
                         'parent': joint_parent_links[i],
                         'child': joint_child_links[i],
-                        'axis': joint_axes[i]
+                        'axis': joint_axes[i],
+                        'lower': limit['lower'],
+                        'upper': limit['upper'],
                     })
             
             # Create joint sliders
