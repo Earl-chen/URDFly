@@ -33,6 +33,8 @@ TRANSLATIONS = {
     "show_mdh_frames": {"zh_CN": "显示 MDH 坐标系", "en": "Show MDH Frames"},
     "show_collision": {"zh_CN": "显示碰撞体", "en": "Show Collision"},
     "show_joint_axes": {"zh_CN": "显示关节轴", "en": "Show Joint Axes"},
+    "show_com": {"zh_CN": "显示质心 (COM)", "en": "Show CoM"},
+    "show_inertia": {"zh_CN": "显示惯量", "en": "Show Inertia"},
 
     # === 关节控制 ===
     "joints_control": {"zh_CN": "关节控制", "en": "Joints Control"},
@@ -131,6 +133,8 @@ TRANSLATIONS = {
     "please_select_chain_mdh": {"zh_CN": "请先选择一个运动链以查看 MDH 参数。", "en": "Please select a kinematic chain to view MDH parameters."},
     "no_collision_meshes": {"zh_CN": "没有可用的碰撞网格。请先加载 URDF 文件。", "en": "No collision meshes available. Please load a URDF file first."},
     "no_revolute_joints": {"zh_CN": "没有可用的旋转关节。请先加载 URDF 文件。", "en": "No revolute joints available. Please load a URDF file first."},
+    "please_load_urdf_com": {"zh_CN": "请先加载 URDF 文件。[质心]", "en": "Please load a URDF file first [CoM]"},
+    "please_load_urdf_inertia": {"zh_CN": "请先加载 URDF 文件。[惯量]", "en": "Please load a URDF file first [Inertia]"},
 
     # === 运动链 ===
     "chain_pattern": {"zh_CN": "运动链 {}: {}", "en": "Chain {}: {}"},
@@ -270,6 +274,10 @@ class TranslationManager:
             main_window.cb_mdh_frames.setText(self.tr("show_mdh_frames"))
         if hasattr(main_window, 'cb_collision'):
             main_window.cb_collision.setText(self.tr("show_collision"))
+        if hasattr(main_window, 'cb_com'):
+            main_window.cb_com.setText(self.tr("show_com"))
+        if hasattr(main_window, 'cb_inertia'):
+            main_window.cb_inertia.setText(self.tr("show_inertia"))
 
         # 更新关节控制标签
         if hasattr(main_window, 'joint_label'):

@@ -67,9 +67,17 @@ class URDFParser:
                             self.links[link.get("name")]['collision_mesh'] = None
                             self.links[link.get("name")]['collision_origin'] = None
                 else:
-                    if link.get('name') in self.links:    
+                    if link.get('name') in self.links:
                         self.links[link.get("name")]['collision_mesh'] = None
                         self.links[link.get("name")]['collision_origin'] = None
+
+            # Parse inertial properties (mass, center of mass, inertia)
+            inertial = link.find("inertial")
+            if link.get('name') in self.links:
+                if inertial is not None:
+                    self.links[link.get("name")]['inertial'] = self.parse_inertial(inertial)
+                else:
+                    self.links[link.get("name")]['inertial'] = None
 
 
         # Extract all joints
@@ -110,6 +118,36 @@ class URDFParser:
         if axis_element is None:
             return [0, 0, 1]
         return list(map(float, axis_element.get("xyz", "0 0 1").split()))
+
+    def parse_inertial(self, inertial_element):
+        """Parse inertial element to get mass, center of mass, and inertia tensor"""
+        origin = self.parse_origin(inertial_element.find("origin"))
+
+        # Parse mass
+        mass_elem = inertial_element.find("mass")
+        if mass_elem is not None:
+            mass = float(mass_elem.get("value", "0"))
+        else:
+            mass = None
+
+        # Parse inertia tensor
+        inertia_elem = inertial_element.find("inertia")
+        inertia = None
+        if inertia_elem is not None:
+            inertia = {
+                "ixx": float(inertia_elem.get("ixx", "0")),
+                "ixy": float(inertia_elem.get("ixy", "0")),
+                "ixz": float(inertia_elem.get("ixz", "0")),
+                "iyy": float(inertia_elem.get("iyy", "0")),
+                "iyz": float(inertia_elem.get("iyz", "0")),
+                "izz": float(inertia_elem.get("izz", "0")),
+            }
+
+        return {
+            "origin": origin,
+            "mass": mass,
+            "inertia": inertia
+        }
 
     def compute_transformation(self, rpy, xyz):
         """Compute 4x4 transformation matrix from RPY and XYZ"""

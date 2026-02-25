@@ -49,6 +49,7 @@ from simplify_mesh import create_detailed_approximation
 from translations import TranslationManager, tr, get_translation_manager
 from geometry_factory import GeometryFactory
 from topology_dialog import TopologyDialog
+from inertia_visualizer import InertiaVisualizer
 
 
 class DragDropVTKWidget(QVTKRenderWindowInteractor):
@@ -109,6 +110,7 @@ class URDFViewer(QMainWindow):
         self.revolute_joints = []  # List to store revolute joints
         self.joint_value_labels = []  # List to store joint value labels
         self.display_in_degrees = False  # False: rad, True: deg
+        self.inertia_visualizer = None  # Will be created after renderer init
         self.init_ui()
         
 
@@ -220,10 +222,20 @@ class URDFViewer(QMainWindow):
         self.cb_joint_axes.setChecked(False)
         self.cb_joint_axes.stateChanged.connect(self.toggle_joint_axes)
 
+        self.cb_com = QCheckBox(tr("show_com"))
+        self.cb_com.setChecked(False)
+        self.cb_com.stateChanged.connect(self.toggle_com)
+
+        self.cb_inertia = QCheckBox(tr("show_inertia"))
+        self.cb_inertia.setChecked(False)
+        self.cb_inertia.stateChanged.connect(self.toggle_inertia)
+
         visibility_layout.addWidget(self.cb_link_frames)
         visibility_layout.addWidget(self.cb_mdh_frames)
         visibility_layout.addWidget(self.cb_collision)
         visibility_layout.addWidget(self.cb_joint_axes)
+        visibility_layout.addWidget(self.cb_com)
+        visibility_layout.addWidget(self.cb_inertia)
 
         self.visibility_group.setLayout(visibility_layout)
 
@@ -326,6 +338,9 @@ class URDFViewer(QMainWindow):
         self.renderer = vtk.vtkRenderer()
         self.renderer.SetBackground(0.9, 0.9, 0.9)  # Dark gray background
         self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
+
+        # Initialize inertia visualizer
+        self.inertia_visualizer = InertiaVisualizer(self.renderer)
 
         # Set up interactor
         self.interactor = self.vtk_widget.GetRenderWindow().GetInteractor()
@@ -530,6 +545,10 @@ class URDFViewer(QMainWindow):
         self.joint_axis_actors = []
         self.joint_axis_info = []
 
+        # Clear inertia visualizations
+        if self.inertia_visualizer:
+            self.inertia_visualizer.clear()
+
         # Reset selected chain and current URDF file
         self.selected_chain = None
         self.current_urdf_file = None
@@ -724,6 +743,46 @@ class URDFViewer(QMainWindow):
             })
 
         # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
+    def toggle_com(self, state):
+        """Toggle visibility of center of mass markers"""
+        visible = state == Qt.Checked
+
+        if visible:
+            if not self.current_urdf_file:
+                QMessageBox.warning(
+                    self, tr("warning"), tr("please_load_urdf_com")
+                )
+                self.cb_com.setChecked(False)
+                return
+
+            # Create CoM markers
+            parser = URDFParser(self.current_urdf_file)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            self.inertia_visualizer.create_com_markers(parser, link_names, link_frames)
+
+        self.inertia_visualizer.set_com_visibility(visible)
+        self.vtk_widget.GetRenderWindow().Render()
+
+    def toggle_inertia(self, state):
+        """Toggle visibility of inertia boxes"""
+        visible = state == Qt.Checked
+
+        if visible:
+            if not self.current_urdf_file:
+                QMessageBox.warning(
+                    self, tr("warning"), tr("please_load_urdf_inertia")
+                )
+                self.cb_inertia.setChecked(False)
+                return
+
+            # Create inertia boxes
+            parser = URDFParser(self.current_urdf_file)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
+
+        self.inertia_visualizer.set_inertia_visibility(visible)
         self.vtk_widget.GetRenderWindow().Render()
 
     def create_mdh_frames(self, chain):
@@ -1145,6 +1204,10 @@ class URDFViewer(QMainWindow):
         # Update joint axes if they are visible
         if hasattr(self, 'cb_joint_axes') and self.cb_joint_axes.isChecked():
             self.create_joint_axes()
+
+        # Update inertia visualizations if visible
+        if self.inertia_visualizer and (self.cb_com.isChecked() or self.cb_inertia.isChecked()):
+            self.inertia_visualizer.update_transforms(link_names, link_frames)
 
         # Update the rendering
         self.vtk_widget.GetRenderWindow().Render()
