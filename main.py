@@ -50,6 +50,7 @@ from translations import TranslationManager, tr, get_translation_manager
 from geometry_factory import GeometryFactory
 from topology_dialog import TopologyDialog
 from inertia_visualizer import InertiaVisualizer
+from drag_interaction_style import DragJointInteractorStyle
 
 
 class DragDropVTKWidget(QVTKRenderWindowInteractor):
@@ -111,6 +112,7 @@ class URDFViewer(QMainWindow):
         self.joint_value_labels = []  # List to store joint value labels
         self.display_in_degrees = False  # False: rad, True: deg
         self.inertia_visualizer = None  # Will be created after renderer init
+        self.actor_to_link = {}  # actor -> link_name mapping for drag interaction
         self.init_ui()
         
 
@@ -345,9 +347,14 @@ class URDFViewer(QMainWindow):
         # Set up interactor
         self.interactor = self.vtk_widget.GetRenderWindow().GetInteractor()
 
-        # Configure interactor style for rotation with left mouse button
-        style = vtk.vtkInteractorStyleTrackballCamera()
-        self.interactor.SetInteractorStyle(style)
+        # Configure interactor style with drag joint support
+        self.interaction_style = DragJointInteractorStyle()
+        self.interaction_style.set_callbacks(
+            get_link_name=self._get_link_name_by_actor,
+            get_joint_for_link=self._get_joint_for_child_link,
+            on_joint_drag=self._on_joint_drag,
+        )
+        self.interactor.SetInteractorStyle(self.interaction_style)
 
         # Initialize interactor
         self.interactor.Initialize()
@@ -482,6 +489,10 @@ class URDFViewer(QMainWindow):
             # Add the actor to the renderer
             self.renderer.AddActor(model.actor)
 
+            # Build actor → link_name mapping for drag interaction
+            if model_type == 'visual':
+                self.actor_to_link[id(model.actor)] = name
+
             # Add the axes actor to the renderer
             if model.axes_actor is not None:
                 self.renderer.AddActor(model.axes_actor)
@@ -520,6 +531,7 @@ class URDFViewer(QMainWindow):
         # Clear the models list
         self.models = []
         self.models_collision = []
+        self.actor_to_link = {}
 
 
         # Clear the combo box and link list
@@ -988,6 +1000,51 @@ class URDFViewer(QMainWindow):
         btn_apply.clicked.connect(parse_and_apply)
         btn_cancel.clicked.connect(dialog.reject)
         dialog.exec_()
+
+    def _get_link_name_by_actor(self, actor):
+        """根据 VTK actor 获取对应的 link 名称"""
+        return self.actor_to_link.get(id(actor))
+
+    def _get_joint_for_child_link(self, link_name):
+        """根据 link 名称找到以该 link 为 child 的关节
+
+        Returns:
+            (joint_index, joint_info) 或 (None, None)
+        """
+        for i, joint in enumerate(self.revolute_joints):
+            if joint['child'] == link_name:
+                return i, joint
+        return None, None
+
+    def _on_joint_drag(self, joint_index, delta_angle):
+        """拖拽产生的关节角度变化回调"""
+        if joint_index < 0 or joint_index >= len(self.joint_values):
+            return
+
+        # 更新角度
+        new_angle = self.joint_values[joint_index] + delta_angle
+
+        # 限制在 slider 范围内
+        slider = self.joint_sliders[joint_index]
+        min_rad = slider.minimum() / 100.0
+        max_rad = slider.maximum() / 100.0
+        new_angle = max(min_rad, min(max_rad, new_angle))
+
+        # 更新值
+        self.joint_values[joint_index] = new_angle
+
+        # 同步 slider（阻止信号避免重复更新）
+        slider_val = int(round(new_angle * 100.0))
+        was_blocked = slider.blockSignals(True)
+        slider.setValue(slider_val)
+        slider.blockSignals(was_blocked)
+
+        # 更新标签
+        if joint_index < len(self.joint_value_labels):
+            self.joint_value_labels[joint_index].setText(self.format_angle(new_angle))
+
+        # 更新模型
+        self.update_model_with_joint_angles()
 
     def show_topology_graph(self):
         """Show the robot topology graph dialog"""
