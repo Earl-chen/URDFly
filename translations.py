@@ -17,9 +17,9 @@ TRANSLATIONS = {
     "robot_structure": {"zh_CN": "机器人结构：", "en": "Robot Structure:"},
     "select_chain": {"zh_CN": "选择运动链：", "en": "Select Chain:"},
     "links": {"zh_CN": "连杆：", "en": "Links:"},
-    "open_urdf": {"zh_CN": "打开 URDF", "en": "Open URDF"},
-    "edit_urdf": {"zh_CN": "编辑 URDF", "en": "Edit URDF"},
-    "edit_urdf_tooltip": {"zh_CN": "在 XML 编辑器中打开当前 URDF 文件", "en": "Open the current URDF file in an XML editor"},
+    "open_urdf": {"zh_CN": "打开模型", "en": "Open Model"},
+    "edit_urdf": {"zh_CN": "编辑模型", "en": "Edit Model"},
+    "edit_urdf_tooltip": {"zh_CN": "在 XML 编辑器中打开当前模型文件 (URDF/MJCF)", "en": "Open the current model file (URDF/MJCF) in an XML editor"},
     "show_mdh": {"zh_CN": "显示 MDH 参数", "en": "Show MDH Parameters"},
     "decompose_collision": {"zh_CN": "凸分解碰撞体", "en": "Decompose As Collision"},
     "set_joints": {"zh_CN": "设置关节", "en": "Set Joints"},
@@ -29,6 +29,7 @@ TRANSLATIONS = {
 
     # === 显示设置 ===
     "visibility_settings": {"zh_CN": "显示设置", "en": "Visibility"},
+    "show_visual": {"zh_CN": "显示视觉", "en": "Show Visual"},
     "show_link_frames": {"zh_CN": "显示连杆坐标系", "en": "Show Link Frames"},
     "show_mdh_frames": {"zh_CN": "显示 MDH 坐标系", "en": "Show MDH Frames"},
     "show_collision": {"zh_CN": "显示碰撞体", "en": "Show Collision"},
@@ -38,9 +39,18 @@ TRANSLATIONS = {
 
     # === 关节控制 ===
     "joints_control": {"zh_CN": "关节控制", "en": "Joints Control"},
+    "joint_group": {"zh_CN": "关节控制", "en": "Joint Control"},
+    "joint_control": {"zh_CN": "调整关节角度：", "en": "Joint Angles:"},
     "adjust_joint_angles": {"zh_CN": "调整关节角度：", "en": "Adjust joint angles:"},
+    "angle_unit": {"zh_CN": "角度单位：", "en": "Angle Unit:"},
+    "units_radian": {"zh_CN": "弧度", "en": "Radian"},
+    "units_degree": {"zh_CN": "度", "en": "Degree"},
+    "range_label": {"zh_CN": "范围: {} ~ {}", "en": "Range: {} ~ {}"},
     "reset": {"zh_CN": "重置", "en": "Reset"},
+    "btn_reset": {"zh_CN": "重置", "en": "Reset"},
     "random": {"zh_CN": "随机", "en": "Random"},
+    "btn_random": {"zh_CN": "随机", "en": "Random"},
+    "btn_save": {"zh_CN": "保存", "en": "Save"},
 
     # === 当前文件 ===
     "current_file": {"zh_CN": "当前文件：", "en": "Current File:"},
@@ -65,6 +75,11 @@ TRANSLATIONS = {
 
     # === 凸分解对话框 ===
     "decomp_title": {"zh_CN": "凸分解碰撞体", "en": "Decompose Collision Meshes"},
+    "decomp_info": {"zh_CN": "为每个连杆的碰撞网格创建简化的近似版本", "en": "Create simplified approximations for each link's collision mesh"},
+    "select_method": {"zh_CN": "选择方法：", "en": "Method:"},
+    "method_vhc": {"zh_CN": "VHACD算法", "en": "VHACD"},
+    "method_bounding": {"zh_CN": "包围盒", "en": "Bounding Box"},
+    "decomp_progress": {"zh_CN": "正在分解...", "en": "Decomposing..."},
     "mesh_file": {"zh_CN": "网格文件", "en": "Mesh File"},
     "max_convex_hulls": {"zh_CN": "最大凸包数", "en": "maxConvexHulls"},
     "decomposition_complete": {"zh_CN": "分解完成", "en": "Decomposition Complete"},
@@ -115,6 +130,8 @@ TRANSLATIONS = {
     # === 对话框标题 ===
     "dialog_open_urdf": {"zh_CN": "打开模型文件", "en": "Open Model File"},
     "dialog_urdf_filter": {"zh_CN": "机器人模型文件 (*.urdf *.xml)", "en": "Robot Model Files (*.urdf *.xml)"},
+    "dialog_open_robot": {"zh_CN": "打开机器人文件", "en": "Open Robot File"},
+    "dialog_robot_filter": {"zh_CN": "机器人文件 (*.urdf *.xml);;URDF 文件 (*.urdf);;MJCF 文件 (*.xml)", "en": "Robot Files (*.urdf *.xml);;URDF Files (*.urdf);;MJCF Files (*.xml)"},
     "dialog_save_file_as": {"zh_CN": "文件另存为", "en": "Save File As"},
     "dialog_save_mdh": {"zh_CN": "保存 MDH 参数", "en": "Save MDH Parameters"},
     "dialog_text_files": {"zh_CN": "文本文件 (*.txt)", "en": "Text Files (*.txt)"},
@@ -122,6 +139,8 @@ TRANSLATIONS = {
     # === MJCF 相关 ===
     "load_mjcf_failed": {"zh_CN": "加载 MJCF 文件失败: {}", "en": "Failed to load MJCF file: {}"},
     "unsupported_format": {"zh_CN": "不支持的文件格式: {}", "en": "Unsupported file format: {}"},
+    "invalid_mjcf_file": {"zh_CN": "无效的 MuJoCo MJCF 文件（XML 文件必须包含 <mujoco> 根元素）", "en": "Invalid MuJoCo MJCF file (XML file must contain <mujoco> root element)"},
+    "mdh_urdf_only": {"zh_CN": "MDH 参数功能仅支持 URDF 文件", "en": "MDH parameters are only supported for URDF files"},
 
     # === 语言切换 ===
     "language": {"zh_CN": "语言：", "en": "Language:"},
@@ -145,6 +164,9 @@ TRANSLATIONS = {
 
     # === 设置关节对话框 ===
     "set_joints_title": {"zh_CN": "设置关节角度", "en": "Set Joint Angles"},
+    "set_joints_info": {"zh_CN": "手动输入所有关节的角度值", "en": "Manually enter angle values for all joints"},
+    "joint_name_header": {"zh_CN": "关节", "en": "Joint"},
+    "angle_header": {"zh_CN": "角度（{}）", "en": "Angle ({})"},
     "enter_joint_angles": {"zh_CN": "输入关节角度（用逗号或空格分隔）：", "en": "Enter joint angles (comma or space separated):"},
     "units": {"zh_CN": "单位：", "en": "Units:"},
     "apply": {"zh_CN": "应用", "en": "Apply"},
@@ -274,6 +296,8 @@ class TranslationManager:
 
         if hasattr(main_window, 'cb_link_frames'):
             main_window.cb_link_frames.setText(self.tr("show_link_frames"))
+        if hasattr(main_window, 'cb_visual'):
+            main_window.cb_visual.setText(self.tr("show_visual"))
         if hasattr(main_window, 'cb_mdh_frames'):
             main_window.cb_mdh_frames.setText(self.tr("show_mdh_frames"))
         if hasattr(main_window, 'cb_collision'):
