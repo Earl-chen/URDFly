@@ -113,11 +113,15 @@ TRANSLATIONS = {
     "copied": {"zh_CN": "已复制", "en": "Copied"},
 
     # === 对话框标题 ===
-    "dialog_open_urdf": {"zh_CN": "打开 URDF 文件", "en": "Open URDF File"},
-    "dialog_urdf_filter": {"zh_CN": "URDF 文件 (*.urdf)", "en": "URDF Files (*.urdf)"},
+    "dialog_open_urdf": {"zh_CN": "打开模型文件", "en": "Open Model File"},
+    "dialog_urdf_filter": {"zh_CN": "机器人模型文件 (*.urdf *.xml)", "en": "Robot Model Files (*.urdf *.xml)"},
     "dialog_save_file_as": {"zh_CN": "文件另存为", "en": "Save File As"},
     "dialog_save_mdh": {"zh_CN": "保存 MDH 参数", "en": "Save MDH Parameters"},
     "dialog_text_files": {"zh_CN": "文本文件 (*.txt)", "en": "Text Files (*.txt)"},
+
+    # === MJCF 相关 ===
+    "load_mjcf_failed": {"zh_CN": "加载 MJCF 文件失败: {}", "en": "Failed to load MJCF file: {}"},
+    "unsupported_format": {"zh_CN": "不支持的文件格式: {}", "en": "Unsupported file format: {}"},
 
     # === 语言切换 ===
     "language": {"zh_CN": "语言：", "en": "Language:"},

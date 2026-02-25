@@ -52,35 +52,41 @@ from topology_dialog import TopologyDialog
 from inertia_visualizer import InertiaVisualizer
 from drag_interaction_style import DragJointInteractorStyle
 
+try:
+    from mjcf_parser import MJCFParser
+    HAS_MJCF = True
+except ImportError:
+    HAS_MJCF = False
+
 
 class DragDropVTKWidget(QVTKRenderWindowInteractor):
-    """Custom VTK widget that supports drag-and-drop of URDF files"""
-    
+    """Custom VTK widget that supports drag-and-drop of URDF/MJCF files"""
+
+    SUPPORTED_EXTENSIONS = ('.urdf', '.xml')
+
     def __init__(self, parent=None):
         super().__init__()
         self.parent_viewer = parent
         self.setAcceptDrops(True)
-    
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         """Handle drag enter event"""
         if event.mimeData().hasUrls():
-            # Check if any of the dragged files is a URDF file
             for url in event.mimeData().urls():
                 if url.isLocalFile():
                     file_path = url.toLocalFile()
-                    if file_path.lower().endswith('.urdf'):
+                    if file_path.lower().endswith(self.SUPPORTED_EXTENSIONS):
                         event.acceptProposedAction()
                         return
         event.ignore()
-    
+
     def dropEvent(self, event: QDropEvent):
         """Handle drop event"""
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
                 if url.isLocalFile():
                     file_path = url.toLocalFile()
-                    if file_path.lower().endswith('.urdf'):
-                        # Load the URDF file
+                    if file_path.lower().endswith(self.SUPPORTED_EXTENSIONS):
                         if self.parent_viewer:
                             self.parent_viewer.load_urdf_file(file_path)
                         event.acceptProposedAction()
@@ -376,15 +382,38 @@ class URDFViewer(QMainWindow):
         # Add the axes to the renderer
         self.renderer.AddActor(axes)
 
+    def _create_parser(self, filename):
+        """根据文件扩展名创建对应的解析器
+
+        Args:
+            filename: 文件路径
+
+        Returns:
+            parser 实例 (URDFParser 或 MJCFParser)
+
+        Raises:
+            ValueError: 不支持的文件格式
+            ImportError: MJCF 依赖未安装
+        """
+        ext = os.path.splitext(filename)[1].lower()
+        if ext == '.urdf':
+            return URDFParser(filename)
+        elif ext == '.xml':
+            if not HAS_MJCF:
+                raise ImportError("MJCF 支持需要安装 mujoco: pip install mujoco")
+            return MJCFParser(filename)
+        else:
+            raise ValueError(tr("unsupported_format", ext))
+
     def load_urdf_file(self, filename):
-        """Load a URDF file and visualize the robot"""
+        """Load a URDF/MJCF file and visualize the robot"""
         if filename and os.path.exists(filename):
             # Clear previous models
             self.clear_models()
 
-            # Parse the URDF file
+            # Parse the file
             try:
-                parser = URDFParser(filename)
+                parser = self._create_parser(filename)
                 
                 # Get robot info for visualization
                 (link_names,
@@ -727,7 +756,7 @@ class URDFViewer(QMainWindow):
         self.joint_axis_info = []
 
         # Create a fresh parser instance
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser(self.current_urdf_file)
 
         # Get robot info to access joint data
         (_, _, _, _, _,
@@ -770,7 +799,7 @@ class URDFViewer(QMainWindow):
                 return
 
             # Create CoM markers
-            parser = URDFParser(self.current_urdf_file)
+            parser = self._create_parser(self.current_urdf_file)
             (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_com_markers(parser, link_names, link_frames)
 
@@ -790,7 +819,7 @@ class URDFViewer(QMainWindow):
                 return
 
             # Create inertia boxes
-            parser = URDFParser(self.current_urdf_file)
+            parser = self._create_parser(self.current_urdf_file)
             (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
 
@@ -810,7 +839,7 @@ class URDFViewer(QMainWindow):
         self.mdh_text_actors = []
         
         # Create a fresh parser instance to ensure we get the latest data
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser(self.current_urdf_file)
         
         # Get chain information to ensure we have the latest chain data
         chains, _ = parser.get_chain_info()
@@ -896,7 +925,7 @@ class URDFViewer(QMainWindow):
             return
         
         # Create a fresh parser instance to ensure we get the latest MDH parameters
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser(self.current_urdf_file)
         
         # Get chain information to ensure we have the latest chain data
         chains, _ = parser.get_chain_info()
@@ -1054,7 +1083,7 @@ class URDFViewer(QMainWindow):
             )
             return
 
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser(self.current_urdf_file)
         dialog = TopologyDialog(self, parser, self.translation_manager)
         dialog.exec_()
 
@@ -1197,7 +1226,7 @@ class URDFViewer(QMainWindow):
             return
         
         # Create a fresh parser instance
-        parser = URDFParser(self.current_urdf_file)
+        parser = self._create_parser(self.current_urdf_file)
         
         # Get updated robot info with joint angles
         (link_names,
@@ -1300,7 +1329,7 @@ class URDFViewer(QMainWindow):
             self.clear_models()
             
             # Parse the URDF from the temporary file
-            parser = URDFParser(temp_path)
+            parser = self._create_parser(temp_path)
             
             # Get robot info for visualization
             (link_names,
