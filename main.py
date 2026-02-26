@@ -45,8 +45,8 @@ from PyQt5.QtWidgets import (
 from xml_editor import XMLEditor
 from mdh_dialog import MDHDialog
 from decomp_dialog import DecompDialog
-from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence
+from PyQt5.QtCore import Qt, QUrl, QSize
+from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QIcon
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 
@@ -346,18 +346,23 @@ class URDFViewer(QMainWindow):
     # Menu / Toolbar / Statusbar builders
     # ------------------------------------------------------------------
 
+    def _icon(self, name):
+        """Load an SVG icon from the icons/ directory."""
+        icon_path = os.path.join(os.path.dirname(__file__), "icons", name)
+        return QIcon(icon_path)
+
     def _create_menubar(self):
         """Create the menu bar with File, View, Tools, Help menus."""
         menubar = self.menuBar()
 
         # File menu
         self.menu_file = menubar.addMenu(tr("menu_file"))
-        self.act_open = QAction(tr("open_urdf"), self)
+        self.act_open = QAction(self._icon("folder-open.svg"), tr("open_urdf"), self)
         self.act_open.setShortcut(QKeySequence("Ctrl+O"))
         self.act_open.triggered.connect(self.open_urdf_file)
         self.menu_file.addAction(self.act_open)
 
-        self.act_edit = QAction(tr("edit_urdf"), self)
+        self.act_edit = QAction(self._icon("file-edit.svg"), tr("edit_urdf"), self)
         self.act_edit.setShortcut(QKeySequence("Ctrl+E"))
         self.act_edit.triggered.connect(self.edit_urdf_file)
         self.menu_file.addAction(self.act_edit)
@@ -391,21 +396,21 @@ class URDFViewer(QMainWindow):
 
         # Tools menu
         self.menu_tools = menubar.addMenu(tr("menu_tools"))
-        self.act_mdh = QAction(tr("show_mdh"), self)
+        self.act_mdh = QAction(self._icon("table.svg"), tr("show_mdh"), self)
         self.act_mdh.setShortcut(QKeySequence("Ctrl+M"))
         self.act_mdh.triggered.connect(self.show_mdh_parameters)
         self.menu_tools.addAction(self.act_mdh)
 
-        self.act_topology = QAction(tr("show_topology"), self)
+        self.act_topology = QAction(self._icon("git-branch.svg"), tr("show_topology"), self)
         self.act_topology.setShortcut(QKeySequence("Ctrl+T"))
         self.act_topology.triggered.connect(self.show_topology_graph)
         self.menu_tools.addAction(self.act_topology)
 
-        self.act_decomp = QAction(tr("decompose_collision"), self)
+        self.act_decomp = QAction(self._icon("box.svg"), tr("decompose_collision"), self)
         self.act_decomp.triggered.connect(self.decompose_collision_meshes)
         self.menu_tools.addAction(self.act_decomp)
 
-        self.act_set_joints = QAction(tr("set_joints"), self)
+        self.act_set_joints = QAction(self._icon("sliders.svg"), tr("set_joints"), self)
         self.act_set_joints.triggered.connect(self.open_set_joints_dialog)
         self.menu_tools.addAction(self.act_set_joints)
 
@@ -419,6 +424,7 @@ class URDFViewer(QMainWindow):
         """Create the main toolbar."""
         self.toolbar = QToolBar()
         self.toolbar.setMovable(False)
+        self.toolbar.setIconSize(QSize(18, 18))
         self.addToolBar(self.toolbar)
 
         self.toolbar.addAction(self.act_open)
@@ -429,12 +435,12 @@ class URDFViewer(QMainWindow):
         self.toolbar.addSeparator()
 
         # Reset / Random as toolbar buttons
-        self.tb_act_reset = QAction(tr("reset"), self)
+        self.tb_act_reset = QAction(self._icon("rotate-ccw.svg"), tr("reset"), self)
         self.tb_act_reset.setShortcut(QKeySequence("Ctrl+R"))
         self.tb_act_reset.triggered.connect(self.reset_joints)
         self.toolbar.addAction(self.tb_act_reset)
 
-        self.tb_act_random = QAction(tr("random"), self)
+        self.tb_act_random = QAction(self._icon("shuffle.svg"), tr("random"), self)
         self.tb_act_random.triggered.connect(self.randomize_joints)
         self.toolbar.addAction(self.tb_act_random)
 
