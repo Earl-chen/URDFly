@@ -13,6 +13,64 @@ URDFly 是一款基于 Python 的 URDF/MJCF 机器人模型编辑与可视化工
 - 正运动学 / 雅可比 / 动力学基回归器 C++ 代码生成
 - 质心与惯量可视化、凸分解碰撞体、拓扑图导出
 
+## 界面现代化重构 (v2.0)
+
+本次版本对 URDFly 界面进行了全面的现代化重构，对标 RViz2、Foxglove、Blender 等专业工具的设计规范：
+
+### 深色主题系统
+
+- 新增 `ThemeManager` 单例管理深色/浅色两套完整色板
+- 全局 QSS 样式表覆盖所有控件（QPushButton、QComboBox、QSlider、QTableWidget 等），带 hover/pressed/disabled 状态
+- VTK 视口改为蓝灰渐变背景
+- 支持运行时深色/浅色主题切换（视图菜单）
+- XML 语法高亮色和拓扑图颜色适配深色背景
+
+### 主窗口布局
+
+- **QMenuBar**：文件(F) / 视图(V) / 工具(T) / 帮助(H) 四个菜单
+- **QToolBar**：打开、编辑、MDH、凸分解、拓扑图、重置、随机 — 带 SVG 图标和文字标签
+- **QSplitter 三面板**：左侧面板、VTK 3D 视图、右侧关节面板均支持拖拽调整宽度
+- **QStatusBar**：显示当前文件信息、关节数、连杆数，操作反馈 3 秒消失
+- **可折叠面板**（Blender 风格）：机器人结构、透明度、显示设置三个 CollapsibleSection
+- 紧凑关节滑块：取消 QGroupBox 包裹，改为扁平行布局，节省约 35% 空间
+- **浮动视图面板**：3D 视口右上角半透明浮动面板，包含 7 个相机预设按钮（前/后/左/右/顶/底/等轴测），Blender 风格
+- **帮助菜单**：快速入门指南、快捷键一览、MDH 参数教程和解析逆运动学教程链接
+- **应用图标**：机械臂 SVG 图标（urdfly-logo.svg）
+
+### 键盘快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+O` | 打开模型 |
+| `Ctrl+E` | 编辑模型 |
+| `Ctrl+M` | MDH 参数 |
+| `Ctrl+T` | 拓扑图 |
+| `Ctrl+R` | 重置关节 |
+| `Ctrl+Q` | 退出 |
+| `Ctrl+F` | XML 编辑器搜索 |
+| `1` / `Ctrl+1` | 前视图 / 后视图 |
+| `3` / `Ctrl+3` | 左视图 / 右视图 |
+| `7` / `Ctrl+7` | 顶视图 / 底视图 |
+| `0` | 等轴测视图 |
+
+### 对话框现代化
+
+- XML 编辑器：工具栏改用 QToolBar + QAction，代码字体改用 JetBrains Mono
+- MDH 对话框：移除内联样式，由 QSS 统一控制
+- 拓扑图对话框：颜色迁移至主题色板，深色背景适配
+
+### 图标
+
+新建 `icons/` 目录，包含 20 个 Lucide 风格 SVG 图标，用于工具栏、菜单和浮动视图面板（含 7 个 view-*.svg 视图图标和 urdfly-logo.svg 应用图标）。
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `theme.py` | 深色/浅色主题管理器 |
+| `widgets.py` | 可折叠面板 CollapsibleSection |
+| `icons/*.svg` | 20 个 SVG 图标（含视图图标和应用图标） |
+
 ## 功能特性
 
 ### 模型加载与格式支持
@@ -30,6 +88,8 @@ URDFly 是一款基于 Python 的 URDF/MJCF 机器人模型编辑与可视化工
 - 点击连杆列表高亮显示对应连杆
 - 视觉模型 / 碰撞模型独立开关
 - 虚拟连杆以红色球体标识
+- **浮动视图面板**（Blender 风格）：3D 视口右上角半透明面板，一键切换前/后/左/右/顶/底/等轴测视图
+- **碰撞体/惯量拖拽交互**：在 3D 视图中拖拽碰撞体或惯量可视化元素时正确更新关节角度
 
 ![碰撞模型可视化](assets/gx7_collision.png)
 
@@ -94,12 +154,12 @@ URDF → Modified DH 参数自动转换，以表格形式显示。支持多运�
 - 以有向图展示机器人连杆-关节树形结构
 - 连杆显示为圆角矩形，关节显示为彩色圆点（按关节类型颜色编码）
 - 支持缩放、平移浏览
-- 导出为 PNG 或 SVG 格式
+- 导出为 PNG（3 倍分辨率 / 300 DPI 高清输出）或 SVG 格式
 
 ### 中英文国际化
 
 - 运行时切换中文 / English，无需重启
-- 覆盖 197+ 翻译键，包括所有菜单、按钮、提示信息
+- 覆盖 230+ 翻译键，包括所有菜单、按钮、提示信息、帮助文档
 
 ## 安装
 
@@ -137,19 +197,22 @@ python main.py
 
 ```
 URDFly/
-├── main.py                     # 主窗口 GUI（PyQt5 三面板布局 + VTK 3D 视图）
+├── main.py                     # 主窗口 GUI（QMenuBar + QToolBar + QSplitter + QStatusBar）
+├── theme.py                    # 深色/浅色主题管理器（QSS 生成 + VTK 背景色）
+├── widgets.py                  # 可折叠面板 CollapsibleSection
 ├── urdf_parser.py              # URDF 解析（网格 URI 解析、正运动学、运动链构建）
 ├── mjcf_parser.py              # MuJoCo MJCF 文件解析
 ├── urdf_vtk_model.py           # VTK 模型封装（STL/OBJ 加载、颜色/透明度管理）
 ├── geometry_factory.py         # VTK 几何体工厂（盒体、球体、圆柱、胶囊体、坐标轴、文本标签）
-├── xml_editor.py               # XML 编辑器（语法高亮、查找替换、π 值插入）
+├── xml_editor.py               # XML 编辑器（语法高亮、查找替换、π 值插入、QToolBar）
 ├── mdh_dialog.py               # MDH 参数对话框（表格显示、代码生成、代码高亮）
-├── topology_dialog.py          # 拓扑有向图对话框（缩放/平移、PNG/SVG 导出）
+├── topology_dialog.py          # 拓扑有向图对话框（缩放/平移、PNG/SVG 导出、深色主题）
 ├── decomp_dialog.py            # 凸分解配置对话框
 ├── inertia_visualizer.py       # 质心标记与惯量盒可视化
 ├── drag_interaction_style.py   # 拖拽交互控制关节角度
-├── translations.py             # 中英文国际化（197+ 翻译键）
+├── translations.py             # 中英文国际化（230+ 翻译键）
 ├── simplify_mesh.py            # 网格凸分解（trimesh + V-HACD）
+├── icons/                      # SVG 图标集（Lucide 风格）
 ├── codegen/                    # 代码生成模块
 │   ├── forward_kinematics.py   # 符号正运动学（SymPy → C++）
 │   ├── jacobian.py             # 雅可比矩阵符号计算
