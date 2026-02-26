@@ -194,6 +194,29 @@ TRANSLATIONS = {
     "export_failed": {"zh_CN": "导出失败。", "en": "Export failed."},
     "export_empty_scene": {"zh_CN": "场景为空，无法导出。", "en": "Scene is empty, cannot export."},
     "load_urdf_topology": {"zh_CN": "请先加载 URDF 文件。[拓扑图]", "en": "Please load a URDF file first [Topology]"},
+
+    # === 菜单栏 ===
+    "menu_file": {"zh_CN": "文件(&F)", "en": "&File"},
+    "menu_view": {"zh_CN": "视图(&V)", "en": "&View"},
+    "menu_tools": {"zh_CN": "工具(&T)", "en": "&Tools"},
+    "menu_help": {"zh_CN": "帮助(&H)", "en": "&Help"},
+    "quit": {"zh_CN": "退出", "en": "Quit"},
+    "toggle_left_panel": {"zh_CN": "切换左侧面板", "en": "Toggle Left Panel"},
+    "toggle_right_panel": {"zh_CN": "切换右侧面板", "en": "Toggle Right Panel"},
+    "theme_dark": {"zh_CN": "深色主题", "en": "Dark Theme"},
+    "theme_light": {"zh_CN": "浅色主题", "en": "Light Theme"},
+    "about": {"zh_CN": "关于", "en": "About"},
+    "about_text": {"zh_CN": "URDFly - URDF/MJCF 机器人模型可视化工具", "en": "URDFly - URDF/MJCF Robot Model Visualization Tool"},
+
+    # === 状态栏 ===
+    "ready": {"zh_CN": "就绪", "en": "Ready"},
+    "status_file_info": {"zh_CN": "{} | {} 个关节 | {} 个连杆", "en": "{} | {} joints | {} links"},
+    "model_loaded": {"zh_CN": "模型已加载: {}", "en": "Model loaded: {}"},
+
+    # === 可折叠面板 ===
+    "section_robot_structure": {"zh_CN": "机器人结构", "en": "Robot Structure"},
+    "section_transparency": {"zh_CN": "透明度", "en": "Transparency"},
+    "section_display": {"zh_CN": "显示设置", "en": "Display Settings"},
 }
 
 
@@ -271,26 +294,11 @@ class TranslationManager:
             else:
                 main_window.current_file_label.setText(self.tr("current_file") + " " + self.tr("current_file_none"))
 
-        # 更新按钮
-        if hasattr(main_window, 'btn_open'):
-            main_window.btn_open.setText(self.tr("open_urdf"))
-        if hasattr(main_window, 'btn_edit'):
-            main_window.btn_edit.setText(self.tr("edit_urdf"))
-            main_window.btn_edit.setToolTip(self.tr("edit_urdf_tooltip"))
-        if hasattr(main_window, 'btn_mdh'):
-            main_window.btn_mdh.setText(self.tr("show_mdh"))
-        if hasattr(main_window, 'btn_decomp'):
-            main_window.btn_decomp.setText(self.tr("decompose_collision"))
-        if hasattr(main_window, 'btn_set_joints'):
-            main_window.btn_set_joints.setText(self.tr("set_joints"))
-        if hasattr(main_window, 'btn_topology'):
-            main_window.btn_topology.setText(self.tr("show_topology"))
-
         # 更新透明度标签
         if hasattr(main_window, 'transparency_label'):
             main_window.transparency_label.setText(self.tr("transparency"))
 
-        # 更新显示设置组
+        # 更新显示设置组 (QGroupBox 或 CollapsibleSection)
         if hasattr(main_window, 'visibility_group'):
             main_window.visibility_group.setTitle(self.tr("visibility_settings"))
 
@@ -329,6 +337,52 @@ class TranslationManager:
         if hasattr(main_window, 'language_combo'):
             main_window.language_combo.setItemText(0, self.tr("lang_zh"))
             main_window.language_combo.setItemText(1, self.tr("lang_en"))
+
+        # === 菜单栏 ===
+        if hasattr(main_window, 'menu_file'):
+            main_window.menu_file.setTitle(self.tr("menu_file"))
+        if hasattr(main_window, 'menu_view'):
+            main_window.menu_view.setTitle(self.tr("menu_view"))
+        if hasattr(main_window, 'menu_tools'):
+            main_window.menu_tools.setTitle(self.tr("menu_tools"))
+        if hasattr(main_window, 'menu_help'):
+            main_window.menu_help.setTitle(self.tr("menu_help"))
+
+        # 菜单动作
+        if hasattr(main_window, 'act_open'):
+            main_window.act_open.setText(self.tr("open_urdf"))
+        if hasattr(main_window, 'act_edit'):
+            main_window.act_edit.setText(self.tr("edit_urdf"))
+        if hasattr(main_window, 'act_quit'):
+            main_window.act_quit.setText(self.tr("quit"))
+        if hasattr(main_window, 'act_toggle_left'):
+            main_window.act_toggle_left.setText(self.tr("toggle_left_panel"))
+        if hasattr(main_window, 'act_toggle_right'):
+            main_window.act_toggle_right.setText(self.tr("toggle_right_panel"))
+        if hasattr(main_window, 'act_dark_theme'):
+            main_window.act_dark_theme.setText(self.tr("theme_dark"))
+        if hasattr(main_window, 'act_light_theme'):
+            main_window.act_light_theme.setText(self.tr("theme_light"))
+        if hasattr(main_window, 'act_mdh'):
+            main_window.act_mdh.setText(self.tr("show_mdh"))
+        if hasattr(main_window, 'act_topology'):
+            main_window.act_topology.setText(self.tr("show_topology"))
+        if hasattr(main_window, 'act_decomp'):
+            main_window.act_decomp.setText(self.tr("decompose_collision"))
+        if hasattr(main_window, 'act_set_joints'):
+            main_window.act_set_joints.setText(self.tr("set_joints"))
+        if hasattr(main_window, 'act_about'):
+            main_window.act_about.setText(self.tr("about"))
+
+        # === 工具栏动作 (同菜单共用，已更新) ===
+
+        # === 可折叠面板标题 ===
+        if hasattr(main_window, 'section_structure'):
+            main_window.section_structure.set_title(self.tr("section_robot_structure"))
+        if hasattr(main_window, 'section_transparency'):
+            main_window.section_transparency.set_title(self.tr("section_transparency"))
+        if hasattr(main_window, 'section_display'):
+            main_window.section_display.set_title(self.tr("section_display"))
 
     @staticmethod
     def get_available_languages():

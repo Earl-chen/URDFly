@@ -34,12 +34,19 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QScrollArea,
     QDesktopWidget,
+    QSplitter,
+    QToolBar,
+    QStatusBar,
+    QAction,
+    QFrame,
+    QMenu,
+    QMenuBar,
 )
 from xml_editor import XMLEditor
 from mdh_dialog import MDHDialog
 from decomp_dialog import DecompDialog
 from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QDragEnterEvent, QDropEvent
+from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 
@@ -52,6 +59,7 @@ from topology_dialog import TopologyDialog
 from inertia_visualizer import InertiaVisualizer
 from drag_interaction_style import DragJointInteractorStyle
 from theme import ThemeManager
+from widgets import CollapsibleSection
 
 try:
     from mjcf_parser import MJCFParser
@@ -130,90 +138,64 @@ class URDFViewer(QMainWindow):
         # Set window size
         window_width = 1200
         window_height = 800
-        
+
         # Get screen size and calculate center position
         screen = QDesktopWidget().availableGeometry()
         x = (screen.width() - window_width) // 2
         y = (screen.height() - window_height) // 2
-        
+
         # Set window geometry to be centered on screen
         self.setGeometry(x, y, window_width, window_height)
 
-        # Create central widget and main layout
-        central_widget = QWidget()
-        main_layout = QHBoxLayout(central_widget)
+        # ====== QMenuBar ======
+        self._create_menubar()
 
-        # Create left panel for controls
+        # ====== QToolBar ======
+        self._create_toolbar()
+
+        # ====== QStatusBar ======
+        self._create_statusbar()
+
+        # ====== Central Widget: QSplitter 三面板 ======
+        self.splitter = QSplitter(Qt.Horizontal)
+
+        # --- Left Panel ---
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
-        
-        # Create right panel for joint controls
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
+        left_layout.setContentsMargins(6, 6, 6, 6)
+        left_layout.setSpacing(6)
 
-        # Create chain selection combo box
-        chain_selection_layout = QVBoxLayout()
+        # CollapsibleSection: 机器人结构
+        self.section_structure = CollapsibleSection(tr("section_robot_structure"))
         self.select_chain_label = QLabel(tr("select_chain"))
-        chain_selection_layout.addWidget(self.select_chain_label)
+        self.section_structure.add_widget(self.select_chain_label)
         self.chain_combo = QComboBox()
         self.chain_combo.currentIndexChanged.connect(self.on_chain_selected)
-        chain_selection_layout.addWidget(self.chain_combo)
-
-        # Create link list widget
+        self.section_structure.add_widget(self.chain_combo)
         self.links_label = QLabel(tr("links"))
-        chain_selection_layout.addWidget(self.links_label)
+        self.section_structure.add_widget(self.links_label)
         self.link_list = QListWidget()
         self.link_list.setSelectionMode(QListWidget.SingleSelection)
         self.link_list.itemSelectionChanged.connect(self.on_link_selection_changed)
-        chain_selection_layout.addWidget(self.link_list)
-        
-        # Create a widget to hold the chain selection layout
-        chain_selection_widget = QWidget()
-        chain_selection_widget.setLayout(chain_selection_layout)
+        self.section_structure.add_widget(self.link_list)
+        left_layout.addWidget(self.section_structure)
 
-        # Create button for opening URDF file
-        self.btn_open = QPushButton(tr("open_urdf"))
-        self.btn_open.clicked.connect(self.open_urdf_file)
-
-        # Create Edit button
-        self.btn_edit = QPushButton(tr("edit_urdf"))
-        self.btn_edit.clicked.connect(self.edit_urdf_file)
-        self.btn_edit.setToolTip(tr("edit_urdf_tooltip"))
-
-        # Create MDH button
-        self.btn_mdh = QPushButton(tr("show_mdh"))
-        self.btn_mdh.clicked.connect(self.show_mdh_parameters)
-
-        self.btn_decomp = QPushButton(tr("decompose_collision"))
-        self.btn_decomp.clicked.connect(self.decompose_collision_meshes)
-
-        self.btn_set_joints = QPushButton(tr("set_joints"))
-        self.btn_set_joints.clicked.connect(self.open_set_joints_dialog)
-
-        self.btn_topology = QPushButton(tr("show_topology"))
-        self.btn_topology.clicked.connect(self.show_topology_graph)
-
-        # Create transparency controls
-        transparency_group = QGroupBox("")
-        transparency_layout = QVBoxLayout()
-
-        # Transparency slider
+        # CollapsibleSection: 透明度
+        self.section_transparency = CollapsibleSection(tr("section_transparency"))
         self.transparency_label = QLabel(tr("transparency"))
-        transparency_layout.addWidget(self.transparency_label)
+        self.section_transparency.add_widget(self.transparency_label)
         self.transparency_slider = QSlider(Qt.Horizontal)
         self.transparency_slider.setMinimum(0)
         self.transparency_slider.setMaximum(100)
-        self.transparency_slider.setValue(100)  # Default to fully opaque
+        self.transparency_slider.setValue(100)
         self.transparency_slider.setTickPosition(QSlider.TicksBelow)
         self.transparency_slider.setTickInterval(10)
         self.transparency_slider.valueChanged.connect(self.apply_transparency)
-        transparency_layout.addWidget(self.transparency_slider)
+        self.section_transparency.add_widget(self.transparency_slider)
+        left_layout.addWidget(self.section_transparency)
 
-        transparency_group.setLayout(transparency_layout)
-
-        # Create checkboxes for frame visibility
-        self.visibility_group = QGroupBox(tr("visibility_settings"))
-        visibility_layout = QVBoxLayout()
+        # CollapsibleSection: 显示设置
+        self.section_display = CollapsibleSection(tr("section_display"))
 
         self.cb_visual = QCheckBox(tr("show_visual"))
         self.cb_visual.setChecked(True)
@@ -243,78 +225,46 @@ class URDFViewer(QMainWindow):
         self.cb_inertia.setChecked(False)
         self.cb_inertia.stateChanged.connect(self.toggle_inertia)
 
-        visibility_layout.addWidget(self.cb_visual)
-        visibility_layout.addWidget(self.cb_link_frames)
-        visibility_layout.addWidget(self.cb_mdh_frames)
-        visibility_layout.addWidget(self.cb_collision)
-        visibility_layout.addWidget(self.cb_joint_axes)
-        visibility_layout.addWidget(self.cb_com)
-        visibility_layout.addWidget(self.cb_inertia)
+        for cb in (self.cb_visual, self.cb_link_frames, self.cb_mdh_frames,
+                   self.cb_collision, self.cb_joint_axes, self.cb_com, self.cb_inertia):
+            self.section_display.add_widget(cb)
+        left_layout.addWidget(self.section_display)
 
-        self.visibility_group.setLayout(visibility_layout)
+        left_layout.addStretch()
 
-        # Add widgets to left panel
-        left_layout.addWidget(chain_selection_widget)
-        left_layout.addWidget(self.btn_open)
-        left_layout.addWidget(self.btn_edit)
-        left_layout.addWidget(self.btn_mdh)
-        left_layout.addWidget(self.btn_decomp)
-        left_layout.addWidget(self.btn_set_joints)
-        left_layout.addWidget(self.btn_topology)
-
-        left_layout.addWidget(transparency_group)
-        left_layout.addWidget(self.visibility_group)
-
-        # Add language selection
+        # Language selection
         lang_layout = QHBoxLayout()
         self.lang_label = QLabel(tr("language"))
         lang_layout.addWidget(self.lang_label)
         self.language_combo = QComboBox()
         self.language_combo.addItem(tr("lang_zh"), "zh_CN")
         self.language_combo.addItem(tr("lang_en"), "en")
-        self.language_combo.setCurrentIndex(0)  # Default to Chinese
+        self.language_combo.setCurrentIndex(0)
         self.language_combo.currentIndexChanged.connect(self.change_language)
         lang_layout.addWidget(self.language_combo)
         left_layout.addLayout(lang_layout)
 
-        left_layout.addStretch()
-
-        # Add current file label at the bottom of left panel
+        # Current file label
         self.current_file_label = QLabel(tr("current_file") + " " + tr("current_file_none"))
         self.current_file_label.setWordWrap(True)
         self.current_file_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
         left_layout.addWidget(self.current_file_label)
 
-        # Set fixed width for left panel
-        left_panel.setFixedWidth(300)
+        left_panel.setMinimumWidth(200)
 
-        # Create VTK widget for 3D visualization with drag-and-drop support
+        # --- VTK Widget (center) ---
         self.vtk_widget = DragDropVTKWidget(self)
 
-        # Create a scroll area for joint controls
-        joint_scroll_area = QScrollArea()
-        joint_scroll_area.setWidgetResizable(True)
-        joint_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        joint_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        
-        # Create a widget to hold all joint controls
-        self.joint_container = QWidget()
-        self.joint_layout = QVBoxLayout(self.joint_container)
-        
-        # Add a label explaining the sliders
-        self.joint_label = QLabel(tr("adjust_joint_angles"))
-        self.joint_layout.addWidget(self.joint_label)
+        # --- Right Panel: 关节控制 ---
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(6, 6, 6, 6)
+        right_layout.setSpacing(6)
 
-        # We'll add sliders dynamically when a URDF is loaded
-
-        # Set the container as the scroll area's widget
-        joint_scroll_area.setWidget(self.joint_container)
-
-        # Create a group box to contain the scroll area
+        # Joint control header
         self.joint_group = QGroupBox(tr("joints_control"))
         joint_group_layout = QVBoxLayout(self.joint_group)
 
-        # Add reset and random buttons
         buttons_layout = QHBoxLayout()
         self.btn_reset = QPushButton(tr("reset"))
         self.btn_reset.clicked.connect(self.reset_joints)
@@ -322,31 +272,46 @@ class URDFViewer(QMainWindow):
         self.btn_random.clicked.connect(self.randomize_joints)
         buttons_layout.addWidget(self.btn_reset)
         buttons_layout.addWidget(self.btn_random)
-        # Units toggle next to Reset/Random
         self.units_combo = QComboBox()
         self.units_combo.addItems(["rad", "deg"])
         self.units_combo.setCurrentText("rad")
         self.units_combo.currentTextChanged.connect(self.on_units_changed)
         buttons_layout.addWidget(self.units_combo)
         joint_group_layout.addLayout(buttons_layout)
-        
+
+        # Joint scroll area
+        joint_scroll_area = QScrollArea()
+        joint_scroll_area.setWidgetResizable(True)
+        joint_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        joint_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        self.joint_container = QWidget()
+        self.joint_layout = QVBoxLayout(self.joint_container)
+        self.joint_label = QLabel(tr("adjust_joint_angles"))
+        self.joint_layout.addWidget(self.joint_label)
+        joint_scroll_area.setWidget(self.joint_container)
+
         joint_group_layout.addWidget(joint_scroll_area)
-        
-        # Add joint group to right panel
-        right_layout.addWidget(self.joint_group, 1)  # Give it a stretch factor of 1
-        
-        # Set fixed width for right panel
-        right_panel.setFixedWidth(300)
+        right_layout.addWidget(self.joint_group, 1)
 
-        # Add panels to main layout
-        main_layout.addWidget(left_panel)
-        main_layout.addWidget(self.vtk_widget, 1)
-        main_layout.addWidget(right_panel)
+        right_panel.setMinimumWidth(180)
 
-        # Set central widget
-        self.setCentralWidget(central_widget)
+        # --- Assemble QSplitter ---
+        self.splitter.addWidget(left_panel)
+        self.splitter.addWidget(self.vtk_widget)
+        self.splitter.addWidget(right_panel)
+        self.splitter.setSizes([260, 680, 260])
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setStretchFactor(2, 0)
 
-        # Set up VTK rendering
+        self.setCentralWidget(self.splitter)
+
+        # Store panel refs for toggle
+        self._left_panel = left_panel
+        self._right_panel = right_panel
+
+        # ====== VTK Rendering Setup ======
         self.renderer = vtk.vtkRenderer()
         _bottom, _top = ThemeManager().get_vtk_background()
         self.renderer.SetBackground(*_bottom)
@@ -374,11 +339,132 @@ class URDFViewer(QMainWindow):
         # Initialize interactor
         self.interactor.Initialize()
 
-        # Add world axes for reference
-        # self.add_world_axes()
-
         # Start the interactor
         self.interactor.Start()
+
+    # ------------------------------------------------------------------
+    # Menu / Toolbar / Statusbar builders
+    # ------------------------------------------------------------------
+
+    def _create_menubar(self):
+        """Create the menu bar with File, View, Tools, Help menus."""
+        menubar = self.menuBar()
+
+        # File menu
+        self.menu_file = menubar.addMenu(tr("menu_file"))
+        self.act_open = QAction(tr("open_urdf"), self)
+        self.act_open.setShortcut(QKeySequence("Ctrl+O"))
+        self.act_open.triggered.connect(self.open_urdf_file)
+        self.menu_file.addAction(self.act_open)
+
+        self.act_edit = QAction(tr("edit_urdf"), self)
+        self.act_edit.setShortcut(QKeySequence("Ctrl+E"))
+        self.act_edit.triggered.connect(self.edit_urdf_file)
+        self.menu_file.addAction(self.act_edit)
+
+        self.menu_file.addSeparator()
+
+        self.act_quit = QAction(tr("quit"), self)
+        self.act_quit.setShortcut(QKeySequence("Ctrl+Q"))
+        self.act_quit.triggered.connect(self.close)
+        self.menu_file.addAction(self.act_quit)
+
+        # View menu
+        self.menu_view = menubar.addMenu(tr("menu_view"))
+        self.act_toggle_left = QAction(tr("toggle_left_panel"), self)
+        self.act_toggle_left.triggered.connect(self._toggle_left_panel)
+        self.menu_view.addAction(self.act_toggle_left)
+
+        self.act_toggle_right = QAction(tr("toggle_right_panel"), self)
+        self.act_toggle_right.triggered.connect(self._toggle_right_panel)
+        self.menu_view.addAction(self.act_toggle_right)
+
+        self.menu_view.addSeparator()
+
+        self.act_dark_theme = QAction(tr("theme_dark"), self)
+        self.act_dark_theme.triggered.connect(lambda: self._switch_theme("dark"))
+        self.menu_view.addAction(self.act_dark_theme)
+
+        self.act_light_theme = QAction(tr("theme_light"), self)
+        self.act_light_theme.triggered.connect(lambda: self._switch_theme("light"))
+        self.menu_view.addAction(self.act_light_theme)
+
+        # Tools menu
+        self.menu_tools = menubar.addMenu(tr("menu_tools"))
+        self.act_mdh = QAction(tr("show_mdh"), self)
+        self.act_mdh.setShortcut(QKeySequence("Ctrl+M"))
+        self.act_mdh.triggered.connect(self.show_mdh_parameters)
+        self.menu_tools.addAction(self.act_mdh)
+
+        self.act_topology = QAction(tr("show_topology"), self)
+        self.act_topology.setShortcut(QKeySequence("Ctrl+T"))
+        self.act_topology.triggered.connect(self.show_topology_graph)
+        self.menu_tools.addAction(self.act_topology)
+
+        self.act_decomp = QAction(tr("decompose_collision"), self)
+        self.act_decomp.triggered.connect(self.decompose_collision_meshes)
+        self.menu_tools.addAction(self.act_decomp)
+
+        self.act_set_joints = QAction(tr("set_joints"), self)
+        self.act_set_joints.triggered.connect(self.open_set_joints_dialog)
+        self.menu_tools.addAction(self.act_set_joints)
+
+        # Help menu
+        self.menu_help = menubar.addMenu(tr("menu_help"))
+        self.act_about = QAction(tr("about"), self)
+        self.act_about.triggered.connect(self._show_about)
+        self.menu_help.addAction(self.act_about)
+
+    def _create_toolbar(self):
+        """Create the main toolbar."""
+        self.toolbar = QToolBar()
+        self.toolbar.setMovable(False)
+        self.addToolBar(self.toolbar)
+
+        self.toolbar.addAction(self.act_open)
+        self.toolbar.addAction(self.act_edit)
+        self.toolbar.addAction(self.act_mdh)
+        self.toolbar.addAction(self.act_decomp)
+        self.toolbar.addAction(self.act_topology)
+        self.toolbar.addSeparator()
+
+        # Reset / Random as toolbar buttons
+        self.tb_act_reset = QAction(tr("reset"), self)
+        self.tb_act_reset.setShortcut(QKeySequence("Ctrl+R"))
+        self.tb_act_reset.triggered.connect(self.reset_joints)
+        self.toolbar.addAction(self.tb_act_reset)
+
+        self.tb_act_random = QAction(tr("random"), self)
+        self.tb_act_random.triggered.connect(self.randomize_joints)
+        self.toolbar.addAction(self.tb_act_random)
+
+    def _create_statusbar(self):
+        """Create the status bar."""
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_label = QLabel(tr("ready"))
+        self.status_bar.addPermanentWidget(self.status_label)
+
+    # ------------------------------------------------------------------
+    # Toggle / Theme helpers
+    # ------------------------------------------------------------------
+
+    def _toggle_left_panel(self):
+        self._left_panel.setVisible(not self._left_panel.isVisible())
+
+    def _toggle_right_panel(self):
+        self._right_panel.setVisible(not self._right_panel.isVisible())
+
+    def _switch_theme(self, name):
+        tm = ThemeManager()
+        tm.set_theme(name, QApplication.instance())
+        _bottom, _top = tm.get_vtk_background()
+        self.renderer.SetBackground(*_bottom)
+        self.renderer.SetBackground2(*_top)
+        self.vtk_widget.GetRenderWindow().Render()
+
+    def _show_about(self):
+        QMessageBox.about(self, tr("about"), tr("about_text"))
 
     def add_world_axes(self):
         """Add world coordinate axes to the scene"""
@@ -1161,7 +1247,7 @@ class URDFViewer(QMainWindow):
         self.vtk_widget.GetRenderWindow().Render()
 
     def create_joint_sliders(self):
-        """Create sliders for controlling joint angles"""
+        """Create compact sliders for controlling joint angles"""
         # Clear existing sliders
         self.clear_joint_sliders()
 
@@ -1175,65 +1261,59 @@ class URDFViewer(QMainWindow):
             lower = joint.get('lower', -math.pi)
             upper = joint.get('upper', math.pi)
 
-            # Create a group for this joint
-            joint_box = QGroupBox(joint['name'])
-            joint_box_layout = QVBoxLayout(joint_box)
+            # Container widget for this joint (compact layout)
+            joint_widget = QWidget()
+            joint_widget.setObjectName("compactJoint")
+            joint_vbox = QVBoxLayout(joint_widget)
+            joint_vbox.setContentsMargins(4, 4, 4, 2)
+            joint_vbox.setSpacing(2)
 
-            # Range label
-            range_val = upper - lower
-            range_text = tr("range_label", None, f"{lower:.2f}", f"{upper:.2f}")
-            range_label = QLabel(range_text)
-            range_label.setAlignment(Qt.AlignCenter)
-            joint_box_layout.addWidget(range_label)
+            # Row 1: joint name (bold) + current value (right-aligned)
+            header_row = QHBoxLayout()
+            name_label = QLabel(joint['name'])
+            name_label.setStyleSheet("font-weight: bold;")
+            header_row.addWidget(name_label)
+            header_row.addStretch()
 
-            # Create a horizontal layout for min label, slider and max label
-            slider_layout = QHBoxLayout()
+            value_label = QLabel(self.format_angle(0.0))
+            value_label.setMinimumWidth(60)
+            value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            header_row.addWidget(value_label)
+            joint_vbox.addLayout(header_row)
 
-            # Min value label
-            min_label = QLabel(f"{lower:.2f}")
-            min_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            slider_layout.addWidget(min_label)
-
-            # Create a slider
+            # Row 2: slider
             slider = QSlider(Qt.Horizontal)
             slider.setMinimum(int(round(lower * 100)))
             slider.setMaximum(int(round(upper * 100)))
-            slider.setValue(0)       # Default to 0
-            slider.setTickPosition(QSlider.TicksBelow)
+            slider.setValue(0)
 
-            # Adaptive tick interval based on range
+            range_val = upper - lower
             if range_val > math.pi:
-                tick_interval = int(round(math.pi / 2 * 100))  # π/2
+                tick_interval = int(round(math.pi / 2 * 100))
             elif range_val > math.pi / 2:
-                tick_interval = int(round(math.pi / 4 * 100))  # π/4
+                tick_interval = int(round(math.pi / 4 * 100))
             else:
                 tick_interval = max(1, int(round(range_val / 4 * 100)))
             slider.setTickInterval(tick_interval)
 
-            # Create a label to show the current value
-            value_label = QLabel(self.format_angle(0.0))
-            value_label.setMinimumWidth(60)  # Set minimum width to ensure consistent alignment
-            value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # Right-align the text
-
-            # Max value label
-            max_label = QLabel(f"{upper:.2f}")
-            max_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-            # Connect the slider to update function
             slider.valueChanged.connect(lambda val, idx=i, label=value_label: self.update_joint_angle(val, idx, label))
+            joint_vbox.addWidget(slider)
 
-            # Add slider and label to the horizontal layout
-            slider_layout.addWidget(slider, 1)  # Give slider a stretch factor of 1
-            slider_layout.addWidget(max_label)
-            slider_layout.addWidget(value_label)
+            # Row 3: range info (small, secondary color)
+            range_text = tr("range_label", None, f"{lower:.2f}", f"{upper:.2f}")
+            range_label = QLabel(range_text)
+            range_label.setStyleSheet("font-size: 10px; color: #A0A0AA;")
+            joint_vbox.addWidget(range_label)
 
-            # Add the horizontal layout to the joint box
-            joint_box_layout.addLayout(slider_layout)
+            # Separator line
+            sep = QFrame()
+            sep.setFrameShape(QFrame.HLine)
+            sep.setFrameShadow(QFrame.Sunken)
 
-            # Add the joint box to the joint layout
-            self.joint_layout.addWidget(joint_box)
+            self.joint_layout.addWidget(joint_widget)
+            self.joint_layout.addWidget(sep)
 
-            # Store the slider for later access
+            # Store references
             self.joint_sliders.append(slider)
             self.joint_value_labels.append(value_label)
     
@@ -1508,11 +1588,18 @@ class URDFViewer(QMainWindow):
     def update_current_file_label(self):
         """Update the current file label with the current URDF file path"""
         if self.current_urdf_file:
-            # Extract just the filename from the path for cleaner display
             filename = os.path.basename(self.current_urdf_file)
             self.current_file_label.setText(tr("current_file") + " " + filename)
+            # Update status bar
+            n_joints = len(self.revolute_joints)
+            n_links = len(self.models)
+            self.status_label.setText(
+                tr("status_file_info", None, filename, n_joints, n_links)
+            )
+            self.status_bar.showMessage(tr("model_loaded", None, filename), 3000)
         else:
             self.current_file_label.setText(tr("current_file") + " " + tr("current_file_none"))
+            self.status_label.setText(tr("ready"))
 
     def _apply_visibility_settings(self):
         """Apply current checkbox visibility settings to all loaded models.
