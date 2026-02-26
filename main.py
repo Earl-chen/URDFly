@@ -1161,12 +1161,18 @@ class URDFViewer(QMainWindow):
         self.joint_axis_actors = []
         self.joint_axis_info = []
 
-        # Create a fresh parser instance
-        parser = self._create_parser(self.current_urdf_file)
-
-        # Get robot info to access joint data
-        (_, _, _, _, _,
-         joint_names, joint_frames, joint_types, joint_axes, _, _, _, _, _) = parser.get_robot_info()
+        # Get joint data with current joint angles
+        if self.current_parser and HAS_MJCF and isinstance(self.current_parser, MJCFParser):
+            result = self.current_parser.update_transforms(self.joint_values)
+            joint_names = result['joint_names']
+            joint_frames = result['joint_frames']
+            joint_axes = result['joint_axes']
+            joint_types = [j['type'] for j in self.current_parser.joints]
+        else:
+            parser = self._create_parser(self.current_urdf_file)
+            (_, _, _, _, _,
+             joint_names, joint_frames, joint_types, joint_axes,
+             _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
 
         # Create axis arrows for each revolute and continuous joint
         for joint_name, joint_frame, joint_type, axis in zip(
