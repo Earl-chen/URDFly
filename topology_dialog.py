@@ -506,8 +506,9 @@ class TopologyDialog(QDialog):
 
         from PyQt5.QtGui import QImage
 
-        width = int(scene_rect.width())
-        height = int(scene_rect.height())
+        scale = 3  # 3x resolution for high-quality export
+        width = int(scene_rect.width() * scale)
+        height = int(scene_rect.height() * scale)
 
         if width <= 0 or height <= 0:
             QMessageBox.warning(
@@ -522,9 +523,15 @@ class TopologyDialog(QDialog):
         painter = QPainter(image)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.TextAntialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
         self.scene.render(painter, QRectF(0, 0, width, height), scene_rect)
         painter.end()
+
+        # Set DPI metadata (300 DPI)
+        dpm = int(300 / 0.0254)  # dots per meter
+        image.setDotsPerMeterX(dpm)
+        image.setDotsPerMeterY(dpm)
 
         if image.save(filename):
             QMessageBox.information(
