@@ -41,24 +41,24 @@ class XMLHighlighter(QSyntaxHighlighter):
         
         # XML tags
         tag_format = QTextCharFormat()
-        tag_format.setForeground(QColor("#0000FF"))  # Blue
+        tag_format.setForeground(QColor("#569CD6"))  # Blue (dark-theme friendly)
         tag_format.setFontWeight(QFont.Bold)
         self.highlighting_rules.append((r'<[/]?[a-zA-Z0-9_]+[^>]*>', tag_format))
-        
+
         # XML attributes
         attribute_format = QTextCharFormat()
-        attribute_format.setForeground(QColor("#FF0000"))  # Red
+        attribute_format.setForeground(QColor("#9CDCFE"))  # Light cyan
         self.highlighting_rules.append((r'[a-zA-Z0-9_]+(?=\s*=)', attribute_format))
-        
+
         # XML attribute values
         value_format = QTextCharFormat()
-        value_format.setForeground(QColor("#008000"))  # Green
+        value_format.setForeground(QColor("#CE9178"))  # Warm orange
         self.highlighting_rules.append((r'"[^"]*"', value_format))
         self.highlighting_rules.append((r"'[^']*'", value_format))
-        
+
         # XML comment format
         self.comment_format = QTextCharFormat()
-        self.comment_format.setForeground(QColor("#808080"))  # Gray
+        self.comment_format.setForeground(QColor("#6A9955"))  # Green
         self.comment_format.setFontItalic(True)
     
     def highlightBlock(self, text):

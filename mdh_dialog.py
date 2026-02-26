@@ -169,7 +169,6 @@ class MDHDialog(QDialog):
 
         # Add title
         title_label = QLabel(tr("mdh_parameters"))
-        title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         left_layout.addWidget(title_label)
 
         # Create table for MDH parameters

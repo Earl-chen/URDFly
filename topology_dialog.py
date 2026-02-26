@@ -18,29 +18,36 @@ from PyQt5.QtGui import (
     QPen, QBrush, QColor, QFont, QPainter, QFontMetrics
 )
 from PyQt5.QtSvg import QSvgGenerator
+from theme import ThemeManager
 
 
-# 节点颜色配置
-LINK_FILL_COLOR = QColor("#E6F3FF")  # 浅蓝色
-LINK_BORDER_COLOR = QColor("#336699")  # 深蓝边框
-LINK_SELECTED_COLOR = QColor("#FFD700")  # 金色高亮
+def _topo_color(token):
+    """从 ThemeManager 获取拓扑图颜色"""
+    tm = ThemeManager()
+    return tm.get_color(token)
+
+
+# 节点颜色配置 - 使用主题色
+LINK_FILL_COLOR = QColor("#2A4A6E")       # ACCENT_MUTED
+LINK_BORDER_COLOR = QColor("#4A9EFF")     # ACCENT
+LINK_SELECTED_COLOR = QColor("#FFD700")   # 金色高亮
 
 # 关节类型颜色映射
 JOINT_COLORS = {
-    "revolute": QColor("#4682B4"),   # 钢蓝色
-    "continuous": QColor("#4682B4"), # 同revolute
-    "prismatic": QColor("#3CB371"),  # 海绿色
-    "fixed": QColor("#A9A9A9"),      # 灰色
-    "floating": QColor("#FF8C00"),   # 橙色
+    "revolute": QColor("#4A9EFF"),   # 强调色
+    "continuous": QColor("#4A9EFF"),
+    "prismatic": QColor("#4CAF50"),  # 成功色
+    "fixed": QColor("#606068"),      # 禁用文字色
+    "floating": QColor("#FFB74D"),   # 警告色
     "ball": QColor("#BA55D3"),       # 紫色
-    "free": QColor("#FF8C00"),       # 同floating
-    "slide": QColor("#3CB371"),      # 同prismatic
-    "hinge": QColor("#4682B4"),      # 同revolute (MuJoCo)
+    "free": QColor("#FFB74D"),
+    "slide": QColor("#4CAF50"),
+    "hinge": QColor("#4A9EFF"),
 }
-JOINT_SELECTED_COLOR = QColor("#FFD700")  # 金色高亮
+JOINT_SELECTED_COLOR = QColor("#FFD700")
 
 # 连接线颜色
-LINE_COLOR = QColor("#888888")
+LINE_COLOR = QColor("#505058")  # BORDER_STRONG
 
 # 布局参数
 LEVEL_SPACING = 120  # 层级间距（Y方向）
@@ -77,7 +84,7 @@ class LinkNode(QGraphicsRectItem):
         # 添加文本标签
         self.text_item = QGraphicsTextItem(name, self)
         self.text_item.setFont(font)
-        self.text_item.setDefaultTextColor(QColor("#333333"))
+        self.text_item.setDefaultTextColor(QColor("#E0E0E6"))
 
         # 计算文本居中位置
         text_rect = self.text_item.boundingRect()
@@ -195,7 +202,7 @@ class JointNode(QGraphicsItem):
 
         # 绘制文字（圆的下方，水平居中）
         painter.setFont(self.font)
-        painter.setPen(QPen(QColor("#555555")))
+        painter.setPen(QPen(QColor("#A0A0AA")))
         text_x = -self.text_width / 2
         text_y = self.radius + self.gap + self.text_height * 0.8
         painter.drawText(QPointF(text_x, text_y), self.name)
@@ -331,8 +338,10 @@ class TopologyDialog(QDialog):
         self.view = TopologyGraphView(self.scene, self)
         layout.addWidget(self.view)
 
-        # 设置背景色
-        self.view.setBackgroundBrush(QBrush(QColor("#F8F8F8")))
+        # 设置背景色 (深色主题)
+        tm = ThemeManager()
+        bg = tm.get_color("BG_BASE")
+        self.view.setBackgroundBrush(QBrush(QColor(bg)))
 
     def build_graph(self):
         """从 parser 构建拓扑图（子树宽度优先布局）"""

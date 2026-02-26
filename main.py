@@ -51,6 +51,7 @@ from geometry_factory import GeometryFactory
 from topology_dialog import TopologyDialog
 from inertia_visualizer import InertiaVisualizer
 from drag_interaction_style import DragJointInteractorStyle
+from theme import ThemeManager
 
 try:
     from mjcf_parser import MJCFParser
@@ -347,7 +348,10 @@ class URDFViewer(QMainWindow):
 
         # Set up VTK rendering
         self.renderer = vtk.vtkRenderer()
-        self.renderer.SetBackground(0.9, 0.9, 0.9)  # Dark gray background
+        _bottom, _top = ThemeManager().get_vtk_background()
+        self.renderer.SetBackground(*_bottom)
+        self.renderer.SetBackground2(*_top)
+        self.renderer.SetGradientBackground(True)
         self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
 
         # Initialize inertia visualizer
@@ -1597,6 +1601,7 @@ class URDFViewer(QMainWindow):
 def main():
     """Main function to run the application"""
     app = QApplication(sys.argv)
+    ThemeManager().apply(app)
     viewer = URDFViewer()
     viewer.show()
     sys.exit(app.exec_())
