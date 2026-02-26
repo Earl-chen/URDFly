@@ -19,7 +19,9 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QDesktopWidget,
     QLineEdit,
-    QSpinBox
+    QSpinBox,
+    QToolBar,
+    QAction,
 )
 from PyQt5.QtCore import Qt, QSize, pyqtSignal, QRegExp
 import math
@@ -133,133 +135,127 @@ class XMLEditor(QMainWindow):
         # Set window size
         window_width = 1200
         window_height = 800
-        
+
         # Get screen size and calculate center position
         screen = QDesktopWidget().availableGeometry()
         x = (screen.width() - window_width) // 2 - window_width // 2
         y = (screen.height() - window_height) // 2
-        
+
         # Set window geometry to be centered on screen
         self.setGeometry(x, y, window_width, window_height)
-        # Create central widget and main layout
+
+        # ====== QToolBar ======
+        toolbar = QToolBar()
+        toolbar.setMovable(False)
+        self.addToolBar(toolbar)
+
+        self.act_save_as = QAction(tr("save_as"), self)
+        self.act_save_as.setShortcut(QKeySequence("Ctrl+S"))
+        self.act_save_as.triggered.connect(self.save_file_as)
+        toolbar.addAction(self.act_save_as)
+
+        self.act_update = QAction(tr("update"), self)
+        self.act_update.setToolTip(tr("update_tooltip"))
+        self.act_update.triggered.connect(self.update_model)
+        toolbar.addAction(self.act_update)
+
+        toolbar.addSeparator()
+
+        # File path label in toolbar
+        self.file_path_label = QLabel()
+        toolbar.addWidget(self.file_path_label)
+
+        # ====== Central widget ======
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
-        
-        # Create toolbar
-        toolbar_layout = QHBoxLayout()
 
-        # Create save as button
-        self.btn_save_as = QPushButton(tr("save_as"))
-        self.btn_save_as.clicked.connect(self.save_file_as)
-        toolbar_layout.addWidget(self.btn_save_as)
-
-        # Create update button
-        self.btn_update = QPushButton(tr("update"))
-        self.btn_update.clicked.connect(self.update_model)
-        self.btn_update.setToolTip(tr("update_tooltip"))
-        toolbar_layout.addWidget(self.btn_update)
-        
-        # Add spacer to push the file path label to the right
-        toolbar_layout.addStretch()
-        
-        # Create file path label
-        self.file_path_label = QLabel()
-        toolbar_layout.addWidget(self.file_path_label)
-        
-        # Add toolbar to main layout
-        main_layout.addLayout(toolbar_layout)
-        
-        # Create search bar layout
+        # Search bar layout
         search_layout = QHBoxLayout()
 
-        # Create search label
         search_label = QLabel(tr("search"))
         search_layout.addWidget(search_label)
 
-        # Create search input field
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(tr("search_placeholder"))
         self.search_input.returnPressed.connect(self.find_next)
         search_layout.addWidget(self.search_input)
 
-        # Create previous button
         self.btn_prev = QPushButton(tr("previous"))
         self.btn_prev.clicked.connect(self.find_previous)
         self.btn_prev.setToolTip(tr("previous_tooltip"))
         search_layout.addWidget(self.btn_prev)
 
-        # Create next button
         self.btn_next = QPushButton(tr("next"))
         self.btn_next.clicked.connect(self.find_next)
         self.btn_next.setToolTip(tr("next_tooltip"))
         search_layout.addWidget(self.btn_next)
-        
-        # Add search layout to main layout
+
         main_layout.addLayout(search_layout)
-        
-        # Create auto-fill layout
+
+        # Auto-fill layout (pi buttons + precision)
         autofill_layout = QHBoxLayout()
-        
-        # Create pi buttons
-        self.btn_pi = QPushButton("π")
+
+        self.btn_pi = QPushButton("\u03C0")
         self.btn_pi.clicked.connect(lambda: self.insert_pi_value(math.pi))
         self.btn_pi.setToolTip(tr("pi_tooltip"))
         autofill_layout.addWidget(self.btn_pi)
 
-        self.btn_pi_half = QPushButton("π/2")
+        self.btn_pi_half = QPushButton("\u03C0/2")
         self.btn_pi_half.clicked.connect(lambda: self.insert_pi_value(math.pi/2))
         self.btn_pi_half.setToolTip(tr("pi_half_tooltip"))
         autofill_layout.addWidget(self.btn_pi_half)
 
-        self.btn_pi_quarter = QPushButton("π/4")
+        self.btn_pi_quarter = QPushButton("\u03C0/4")
         self.btn_pi_quarter.clicked.connect(lambda: self.insert_pi_value(math.pi/4))
         self.btn_pi_quarter.setToolTip(tr("pi_quarter_tooltip"))
         autofill_layout.addWidget(self.btn_pi_quarter)
-        
-        # Add precision label and spinbox
+
         precision_label = QLabel(tr("precision"))
         autofill_layout.addWidget(precision_label)
-        
+
         self.precision_spinbox = QSpinBox()
         self.precision_spinbox.setMinimum(1)
         self.precision_spinbox.setMaximum(15)
-        self.precision_spinbox.setValue(6)  # Default precision is 6
+        self.precision_spinbox.setValue(6)
         self.precision_spinbox.setToolTip(tr("precision_tooltip"))
         autofill_layout.addWidget(self.precision_spinbox)
-        
-        # Add spacer to push everything to the left
+
         autofill_layout.addStretch()
-        
-        # Add auto-fill layout to main layout
         main_layout.addLayout(autofill_layout)
-        
-        # Create text editor
+
+        # Text editor
         self.text_edit = QTextEdit()
-        self.text_edit.setFont(QFont("Courier New", 10))
+        # Prefer JetBrains Mono or Consolas for monospace
+        font = QFont("JetBrains Mono", 10)
+        font.setStyleHint(QFont.Monospace)
+        self.text_edit.setFont(font)
         self.text_edit.setLineWrapMode(QTextEdit.NoWrap)
-        
+
         # Apply syntax highlighting
         self.highlighter = XMLHighlighter(self.text_edit.document())
-        
-        # Add text editor to main layout
+
         main_layout.addWidget(self.text_edit)
-        
-        # Set central widget
+
         self.setCentralWidget(central_widget)
-        
-        # Create keyboard shortcuts
-        self.shortcut_save = QShortcut(QKeySequence("Ctrl+S"), self)
-        self.shortcut_save.activated.connect(self.save_file_as)
-        
-        # Create search shortcuts
+
+        # Keyboard shortcuts
         self.shortcut_find_next = QShortcut(QKeySequence("F3"), self)
         self.shortcut_find_next.activated.connect(self.find_next)
-        
+
         self.shortcut_find_prev = QShortcut(QKeySequence("Shift+F3"), self)
         self.shortcut_find_prev.activated.connect(self.find_previous)
-        
+
+        # Ctrl+F to focus search box
+        self.shortcut_find = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.shortcut_find.activated.connect(self._focus_search)
+
         # Update file path label
         self.update_file_path_label()
+
+    def _focus_search(self):
+        """Focus the search input field."""
+        self.search_input.setFocus()
+        self.search_input.selectAll()
     
     def load_file(self, file_path):
         """Load a file into the editor"""
