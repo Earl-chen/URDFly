@@ -120,19 +120,29 @@ class LinkNode(QGraphicsRectItem):
         self._selected = selected
         if selected:
             self.setBrush(QBrush(LINK_SELECTED_COLOR))
+            self.text_item.setDefaultTextColor(QColor("#1A1A1A"))
         else:
             self.setBrush(self._original_brush)
+            self.text_item.setDefaultTextColor(QColor("#E0E0E6"))
+
+    def itemChange(self, change, value):
+        """响应 Qt 内置选中状态变化"""
+        if change == QGraphicsRectItem.ItemSelectedChange:
+            self.set_selected(bool(value))
+        return super().itemChange(change, value)
 
     def hoverEnterEvent(self, event):
         """鼠标进入高亮"""
         if not self._selected:
             self.setBrush(QBrush(LINK_SELECTED_COLOR.lighter(150)))
+            self.text_item.setDefaultTextColor(QColor("#1A1A1A"))
         super().hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event):
         """鼠标离开恢复"""
         if not self._selected:
             self.setBrush(self._original_brush)
+            self.text_item.setDefaultTextColor(QColor("#E0E0E6"))
         super().hoverLeaveEvent(event)
 
 
