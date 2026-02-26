@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#232328" stroke="#4A9EFF" stroke-width="2"/>
+  <!-- Robot arm base -->
+  <rect x="26" y="48" width="12" height="6" rx="2" fill="#4A9EFF"/>
+  <!-- Joint 1 (base) -->
+  <circle cx="32" cy="46" r="4" fill="#6BB0FF" stroke="#4A9EFF" stroke-width="1.5"/>
+  <!-- Arm segment 1 -->
+  <line x1="32" y1="46" x2="22" y2="30" stroke="#4A9EFF" stroke-width="4" stroke-linecap="round"/>
+  <!-- Joint 2 (elbow) -->
+  <circle cx="22" cy="30" r="3.5" fill="#6BB0FF" stroke="#4A9EFF" stroke-width="1.5"/>
+  <!-- Arm segment 2 -->
+  <line x1="22" y1="30" x2="36" y2="18" stroke="#4A9EFF" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Joint 3 (wrist) -->
+  <circle cx="36" cy="18" r="3" fill="#6BB0FF" stroke="#4A9EFF" stroke-width="1.5"/>
+  <!-- End effector -->
+  <line x1="36" y1="18" x2="44" y2="12" stroke="#4A9EFF" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- End effector gripper -->
+  <line x1="44" y1="12" x2="48" y2="9" stroke="#6BB0FF" stroke-width="2" stroke-linecap="round"/>
+  <line x1="44" y1="12" x2="48" y2="15" stroke="#6BB0FF" stroke-width="2" stroke-linecap="round"/>
+</svg>

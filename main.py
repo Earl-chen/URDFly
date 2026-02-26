@@ -41,12 +41,13 @@ from PyQt5.QtWidgets import (
     QFrame,
     QMenu,
     QMenuBar,
+    QTextBrowser,
 )
 from xml_editor import XMLEditor
 from mdh_dialog import MDHDialog
 from decomp_dialog import DecompDialog
 from PyQt5.QtCore import Qt, QUrl, QSize
-from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QIcon
+from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QIcon, QDesktopServices
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 
@@ -58,7 +59,7 @@ from geometry_factory import GeometryFactory
 from topology_dialog import TopologyDialog
 from inertia_visualizer import InertiaVisualizer
 from drag_interaction_style import DragJointInteractorStyle
-from theme import ThemeManager
+from theme import ThemeManager, themed_icon
 from widgets import CollapsibleSection
 
 try:
@@ -134,6 +135,7 @@ class URDFViewer(QMainWindow):
     def init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle(tr("window_title"))
+        self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons", "urdfly-logo.svg")))
 
         # Set window size
         window_width = 1200
@@ -347,9 +349,8 @@ class URDFViewer(QMainWindow):
     # ------------------------------------------------------------------
 
     def _icon(self, name):
-        """Load an SVG icon from the icons/ directory."""
-        icon_path = os.path.join(os.path.dirname(__file__), "icons", name)
-        return QIcon(icon_path)
+        """Load an SVG icon with theme-appropriate stroke color."""
+        return themed_icon(name)
 
     def _create_menubar(self):
         """Create the menu bar with File, View, Tools, Help menus."""
@@ -416,6 +417,27 @@ class URDFViewer(QMainWindow):
 
         # Help menu
         self.menu_help = menubar.addMenu(tr("menu_help"))
+
+        self.act_quick_start = QAction(tr("quick_start_guide"), self)
+        self.act_quick_start.triggered.connect(self._show_quick_start)
+        self.menu_help.addAction(self.act_quick_start)
+
+        self.act_shortcuts = QAction(tr("keyboard_shortcuts"), self)
+        self.act_shortcuts.triggered.connect(self._show_shortcuts)
+        self.menu_help.addAction(self.act_shortcuts)
+
+        self.menu_help.addSeparator()
+
+        self.act_tutorial_mdh = QAction(tr("tutorial_mdh"), self)
+        self.act_tutorial_mdh.triggered.connect(lambda: self._open_tutorial("MDH_Parameters_Tutorial.md"))
+        self.menu_help.addAction(self.act_tutorial_mdh)
+
+        self.act_tutorial_ik = QAction(tr("tutorial_ik"), self)
+        self.act_tutorial_ik.triggered.connect(lambda: self._open_tutorial("Analytical_IK_Tutorial.md"))
+        self.menu_help.addAction(self.act_tutorial_ik)
+
+        self.menu_help.addSeparator()
+
         self.act_about = QAction(tr("about"), self)
         self.act_about.triggered.connect(self._show_about)
         self.menu_help.addAction(self.act_about)
@@ -425,6 +447,7 @@ class URDFViewer(QMainWindow):
         self.toolbar = QToolBar()
         self.toolbar.setMovable(False)
         self.toolbar.setIconSize(QSize(18, 18))
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.addToolBar(self.toolbar)
 
         self.toolbar.addAction(self.act_open)
@@ -468,9 +491,80 @@ class URDFViewer(QMainWindow):
         self.renderer.SetBackground(*_bottom)
         self.renderer.SetBackground2(*_top)
         self.vtk_widget.GetRenderWindow().Render()
+        self._refresh_icons()
+
+    def _refresh_icons(self):
+        """Refresh all action icons after theme change."""
+        icon_map = {
+            self.act_open: "folder-open.svg",
+            self.act_edit: "file-edit.svg",
+            self.act_mdh: "table.svg",
+            self.act_decomp: "box.svg",
+            self.act_topology: "git-branch.svg",
+            self.act_set_joints: "sliders.svg",
+            self.tb_act_reset: "rotate-ccw.svg",
+            self.tb_act_random: "shuffle.svg",
+        }
+        for action, icon_name in icon_map.items():
+            action.setIcon(self._icon(icon_name))
 
     def _show_about(self):
         QMessageBox.about(self, tr("about"), tr("about_text"))
+
+    def _show_quick_start(self):
+        """Show the Quick Start Guide dialog."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("quick_start_title"))
+        dlg.resize(700, 500)
+        layout = QVBoxLayout(dlg)
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(True)
+        browser.setHtml(tr("quick_start_html"))
+        layout.addWidget(browser)
+        btn_close = QPushButton(tr("btn_ok"))
+        btn_close.clicked.connect(dlg.accept)
+        layout.addWidget(btn_close)
+        dlg.exec_()
+
+    def _show_shortcuts(self):
+        """Show the Keyboard Shortcuts dialog."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("shortcuts_title"))
+        dlg.resize(500, 400)
+        layout = QVBoxLayout(dlg)
+
+        shortcuts = [
+            ("Ctrl+O", tr("open_urdf")),
+            ("Ctrl+E", tr("edit_urdf")),
+            ("Ctrl+M", tr("show_mdh")),
+            ("Ctrl+T", tr("show_topology")),
+            ("Ctrl+R", tr("reset")),
+            ("Ctrl+Q", tr("quit")),
+            ("Ctrl+F", tr("search")),
+            ("F3", tr("next")),
+            ("Shift+F3", tr("previous")),
+        ]
+
+        table = QTableWidget(len(shortcuts), 2)
+        table.setHorizontalHeaderLabels([tr("shortcut_key"), tr("shortcut_action")])
+        table.horizontalHeader().setStretchLastSection(True)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        for row, (key, desc) in enumerate(shortcuts):
+            table.setItem(row, 0, QTableWidgetItem(key))
+            table.setItem(row, 1, QTableWidgetItem(desc))
+        layout.addWidget(table)
+
+        btn_close = QPushButton(tr("btn_ok"))
+        btn_close.clicked.connect(dlg.accept)
+        layout.addWidget(btn_close)
+        dlg.exec_()
+
+    def _open_tutorial(self, filename):
+        """Open a tutorial markdown file with the system default application."""
+        path = os.path.join(os.path.dirname(__file__), "docs", filename)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def add_world_axes(self):
         """Add world coordinate axes to the scene"""
@@ -1694,6 +1788,8 @@ class URDFViewer(QMainWindow):
 def main():
     """Main function to run the application"""
     app = QApplication(sys.argv)
+    app_icon_path = os.path.join(os.path.dirname(__file__), "icons", "urdfly-logo.svg")
+    app.setWindowIcon(QIcon(app_icon_path))
     ThemeManager().apply(app)
     viewer = URDFViewer()
     viewer.show()

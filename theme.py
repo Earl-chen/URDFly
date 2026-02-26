@@ -5,14 +5,16 @@ ThemeManager - 深色/浅色主题管理
 提供 QSS 样式表生成、VTK 背景色和主题切换功能。
 """
 
+import os
+
 
 DARK_PALETTE = {
     # 背景层级
-    "BG_BASE": "#1B1B1F",
-    "BG_SURFACE": "#252529",
-    "BG_ELEVATED": "#2D2D33",
-    "BG_HOVER": "#35353D",
-    "BG_PRESSED": "#3D3D47",
+    "BG_BASE": "#232328",
+    "BG_SURFACE": "#2B2B30",
+    "BG_ELEVATED": "#333339",
+    "BG_HOVER": "#3B3B43",
+    "BG_PRESSED": "#43434D",
     # 文字
     "TEXT_PRIMARY": "#E0E0E6",
     "TEXT_SECONDARY": "#A0A0AA",
@@ -27,11 +29,11 @@ DARK_PALETTE = {
     "STATUS_WARNING": "#FFB74D",
     "STATUS_ERROR": "#EF5350",
     # 边框
-    "BORDER_SUBTLE": "#3A3A42",
+    "BORDER_SUBTLE": "#404048",
     "BORDER_STRONG": "#505058",
     # VTK 渐变背景 (RGB 0-1)
-    "VTK_BG_TOP": (0.18, 0.20, 0.25),
-    "VTK_BG_BOTTOM": (0.12, 0.13, 0.16),
+    "VTK_BG_TOP": (0.22, 0.24, 0.30),
+    "VTK_BG_BOTTOM": (0.16, 0.17, 0.21),
 }
 
 LIGHT_PALETTE = {
@@ -530,3 +532,22 @@ class ThemeManager:
     def get_color(self, token):
         """按 token 名获取当前色板中的颜色值。"""
         return self.palette.get(token)
+
+
+def themed_icon(name):
+    """Load an SVG icon with theme-appropriate stroke color."""
+    from PyQt5.QtSvg import QSvgRenderer
+    from PyQt5.QtGui import QPixmap, QPainter, QIcon
+    from PyQt5.QtCore import Qt
+    icon_path = os.path.join(os.path.dirname(__file__), "icons", name)
+    stroke_color = ThemeManager().get_color("TEXT_PRIMARY")
+    with open(icon_path, "r") as f:
+        svg_data = f.read()
+    svg_data = svg_data.replace('stroke="#E0E0E6"', f'stroke="{stroke_color}"')
+    renderer = QSvgRenderer(svg_data.encode())
+    pixmap = QPixmap(24, 24)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pixmap)

@@ -217,6 +217,82 @@ TRANSLATIONS = {
     "section_robot_structure": {"zh_CN": "机器人结构", "en": "Robot Structure"},
     "section_transparency": {"zh_CN": "透明度", "en": "Transparency"},
     "section_display": {"zh_CN": "显示设置", "en": "Display Settings"},
+
+    # === 帮助菜单扩展 ===
+    "quick_start_guide": {"zh_CN": "快速入门指南", "en": "Quick Start Guide"},
+    "keyboard_shortcuts": {"zh_CN": "快捷键一览", "en": "Keyboard Shortcuts"},
+    "tutorial_mdh": {"zh_CN": "MDH 参数教程", "en": "MDH Parameters Tutorial"},
+    "tutorial_ik": {"zh_CN": "解析逆运动学教程", "en": "Analytical IK Tutorial"},
+    "quick_start_title": {"zh_CN": "快速入门指南", "en": "Quick Start Guide"},
+    "shortcuts_title": {"zh_CN": "快捷键一览", "en": "Keyboard Shortcuts"},
+    "shortcut_key": {"zh_CN": "快捷键", "en": "Shortcut"},
+    "shortcut_action": {"zh_CN": "功能", "en": "Action"},
+    "quick_start_html": {
+        "zh_CN": """<h2>URDFly 快速入门</h2>
+<h3>1. 打开模型</h3>
+<ul>
+<li>点击工具栏 <b>打开模型</b> 按钮，或使用 <code>Ctrl+O</code></li>
+<li>支持直接拖放 URDF / MJCF 文件到窗口</li>
+</ul>
+<h3>2. 关节控制</h3>
+<ul>
+<li>在右侧面板拖动滑块调整关节角度</li>
+<li>在 3D 视图中直接拖拽连杆来交互式调节关节</li>
+<li>使用工具栏 <b>重置</b> / <b>随机</b> 按钮快速设置角度</li>
+</ul>
+<h3>3. 显示设置</h3>
+<ul>
+<li>在右侧面板切换坐标系、碰撞体、质心、惯量等显示</li>
+<li>使用透明度滑块查看内部结构</li>
+</ul>
+<h3>4. MDH 参数 &amp; 代码生成</h3>
+<ul>
+<li>选择运动链，点击 <b>工具 → 显示 MDH 参数</b>（<code>Ctrl+M</code>）</li>
+<li>查看正运动学、雅可比矩阵，生成 C++/Python 代码</li>
+</ul>
+<h3>5. 拓扑图 &amp; 凸分解</h3>
+<ul>
+<li><b>工具 → 显示拓扑图</b>（<code>Ctrl+T</code>）查看连杆-关节树结构</li>
+<li><b>工具 → 凸分解碰撞体</b> 为碰撞网格生成简化近似</li>
+</ul>
+<h3>6. 视图 &amp; 主题</h3>
+<ul>
+<li><b>视图</b> 菜单切换深色/浅色主题</li>
+<li>可隐藏/显示左右面板获得更大 3D 视口</li>
+</ul>""",
+        "en": """<h2>URDFly Quick Start</h2>
+<h3>1. Open a Model</h3>
+<ul>
+<li>Click the <b>Open Model</b> toolbar button, or press <code>Ctrl+O</code></li>
+<li>You can also drag &amp; drop URDF / MJCF files onto the window</li>
+</ul>
+<h3>2. Joint Control</h3>
+<ul>
+<li>Drag the sliders in the right panel to adjust joint angles</li>
+<li>Drag links directly in the 3D view for interactive joint control</li>
+<li>Use toolbar <b>Reset</b> / <b>Random</b> buttons to quickly set angles</li>
+</ul>
+<h3>3. Visibility Settings</h3>
+<ul>
+<li>Toggle coordinate frames, collision bodies, CoM, inertia in the right panel</li>
+<li>Use the transparency slider to see internal structures</li>
+</ul>
+<h3>4. MDH Parameters &amp; Code Generation</h3>
+<ul>
+<li>Select a kinematic chain, then <b>Tools → Show MDH Parameters</b> (<code>Ctrl+M</code>)</li>
+<li>View forward kinematics, Jacobian matrix, and generate C++/Python code</li>
+</ul>
+<h3>5. Topology &amp; Convex Decomposition</h3>
+<ul>
+<li><b>Tools → Show Topology</b> (<code>Ctrl+T</code>) to view the link-joint tree</li>
+<li><b>Tools → Decompose Collision</b> to create simplified collision meshes</li>
+</ul>
+<h3>6. View &amp; Themes</h3>
+<ul>
+<li>Switch between dark/light themes from the <b>View</b> menu</li>
+<li>Hide/show left/right panels for a larger 3D viewport</li>
+</ul>"""
+    },
 }
 
 
@@ -373,8 +449,20 @@ class TranslationManager:
             main_window.act_set_joints.setText(self.tr("set_joints"))
         if hasattr(main_window, 'act_about'):
             main_window.act_about.setText(self.tr("about"))
+        if hasattr(main_window, 'act_quick_start'):
+            main_window.act_quick_start.setText(self.tr("quick_start_guide"))
+        if hasattr(main_window, 'act_shortcuts'):
+            main_window.act_shortcuts.setText(self.tr("keyboard_shortcuts"))
+        if hasattr(main_window, 'act_tutorial_mdh'):
+            main_window.act_tutorial_mdh.setText(self.tr("tutorial_mdh"))
+        if hasattr(main_window, 'act_tutorial_ik'):
+            main_window.act_tutorial_ik.setText(self.tr("tutorial_ik"))
 
         # === 工具栏动作 (同菜单共用，已更新) ===
+        if hasattr(main_window, 'tb_act_reset'):
+            main_window.tb_act_reset.setText(self.tr("reset"))
+        if hasattr(main_window, 'tb_act_random'):
+            main_window.tb_act_random.setText(self.tr("random"))
 
         # === 可折叠面板标题 ===
         if hasattr(main_window, 'section_structure'):

@@ -27,6 +27,7 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal, QRegExp
 import math
 from PyQt5.QtGui import QFont, QKeySequence, QTextCharFormat, QColor, QSyntaxHighlighter, QTextCursor, QTextDocument, QIcon
 from translations import tr
+from theme import themed_icon
 
 
 class XMLHighlighter(QSyntaxHighlighter):
@@ -149,14 +150,12 @@ class XMLEditor(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
-        _icons_dir = os.path.join(os.path.dirname(__file__), "icons")
-
-        self.act_save_as = QAction(QIcon(os.path.join(_icons_dir, "save.svg")), tr("save_as"), self)
+        self.act_save_as = QAction(themed_icon("save.svg"), tr("save_as"), self)
         self.act_save_as.setShortcut(QKeySequence("Ctrl+S"))
         self.act_save_as.triggered.connect(self.save_file_as)
         toolbar.addAction(self.act_save_as)
 
-        self.act_update = QAction(QIcon(os.path.join(_icons_dir, "refresh-cw.svg")), tr("update"), self)
+        self.act_update = QAction(themed_icon("refresh-cw.svg"), tr("update"), self)
         self.act_update.setToolTip(tr("update_tooltip"))
         self.act_update.triggered.connect(self.update_model)
         toolbar.addAction(self.act_update)
