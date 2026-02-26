@@ -42,11 +42,12 @@ from PyQt5.QtWidgets import (
     QMenu,
     QMenuBar,
     QTextBrowser,
+    QToolButton,
 )
 from xml_editor import XMLEditor
 from mdh_dialog import MDHDialog
 from decomp_dialog import DecompDialog
-from PyQt5.QtCore import Qt, QUrl, QSize
+from PyQt5.QtCore import Qt, QUrl, QSize, QEvent
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QIcon, QDesktopServices
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
@@ -344,6 +345,9 @@ class URDFViewer(QMainWindow):
         # Start the interactor
         self.interactor.Start()
 
+        # ====== View Overlay (floating buttons on VTK viewport) ======
+        self._create_view_overlay()
+
     # ------------------------------------------------------------------
     # Menu / Toolbar / Statusbar builders
     # ------------------------------------------------------------------
@@ -506,22 +510,82 @@ class URDFViewer(QMainWindow):
         self.tb_act_random.triggered.connect(self.randomize_joints)
         self.toolbar.addAction(self.tb_act_random)
 
-        # View buttons
-        self.toolbar.addSeparator()
-        self.toolbar.addAction(self.act_view_front)
-        self.toolbar.addAction(self.act_view_back)
-        self.toolbar.addAction(self.act_view_left)
-        self.toolbar.addAction(self.act_view_right)
-        self.toolbar.addAction(self.act_view_top)
-        self.toolbar.addAction(self.act_view_bottom)
-        self.toolbar.addAction(self.act_view_isometric)
-
     def _create_statusbar(self):
         """Create the status bar."""
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_label = QLabel(tr("ready"))
         self.status_bar.addPermanentWidget(self.status_label)
+
+    def _create_view_overlay(self):
+        """Create a floating view-button panel over the VTK viewport."""
+        tm = ThemeManager()
+        is_dark = tm.current_theme == "dark"
+
+        self._view_overlay = QFrame(self.vtk_widget)
+        self._view_overlay.setObjectName("viewOverlay")
+        self._update_view_overlay_style()
+
+        layout = QVBoxLayout(self._view_overlay)
+        layout.setContentsMargins(3, 3, 3, 3)
+        layout.setSpacing(2)
+
+        view_defs = [
+            (self.act_view_front, "view_front"),
+            (self.act_view_back, "view_back"),
+            (self.act_view_left, "view_left"),
+            (self.act_view_right, "view_right"),
+            (self.act_view_top, "view_top"),
+            (self.act_view_bottom, "view_bottom"),
+            (self.act_view_isometric, "view_isometric"),
+        ]
+
+        self._view_overlay_buttons = []
+        for action, tip_key in view_defs:
+            btn = QToolButton(self._view_overlay)
+            btn.setDefaultAction(action)
+            btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
+            btn.setFixedSize(28, 28)
+            btn.setIconSize(QSize(18, 18))
+            btn.setToolTip(tr(tip_key))
+            btn.setAutoRaise(True)
+            layout.addWidget(btn)
+            self._view_overlay_buttons.append((btn, tip_key))
+
+        self._view_overlay.adjustSize()
+        self._view_overlay.show()
+
+        self.vtk_widget.installEventFilter(self)
+        self._update_view_overlay_position()
+
+    def _update_view_overlay_style(self):
+        """Apply theme-aware style to the view overlay panel."""
+        tm = ThemeManager()
+        is_dark = tm.current_theme == "dark"
+        if is_dark:
+            bg = "rgba(50, 50, 50, 180)"
+            border = "rgba(80, 80, 80, 200)"
+        else:
+            bg = "rgba(255, 255, 255, 180)"
+            border = "rgba(200, 200, 200, 220)"
+        self._view_overlay.setStyleSheet(
+            f"#viewOverlay {{ background: {bg}; border: 1px solid {border}; border-radius: 6px; }}"
+        )
+
+    def _update_view_overlay_position(self):
+        """Reposition the view overlay to the top-right of the VTK widget."""
+        if not hasattr(self, '_view_overlay'):
+            return
+        margin = 8
+        vw = self.vtk_widget.width()
+        ow = self._view_overlay.width()
+        self._view_overlay.move(vw - ow - margin, margin)
+
+    def eventFilter(self, obj, event):
+        """Reposition the view overlay when the VTK widget is resized."""
+        if obj is self.vtk_widget and event.type() == QEvent.Resize:
+            self._update_view_overlay_position()
+        return super().eventFilter(obj, event)
 
     # ------------------------------------------------------------------
     # Toggle / Theme helpers
@@ -541,6 +605,8 @@ class URDFViewer(QMainWindow):
         self.renderer.SetBackground2(*_top)
         self.vtk_widget.GetRenderWindow().Render()
         self._refresh_icons()
+        if hasattr(self, '_view_overlay'):
+            self._update_view_overlay_style()
 
     def _refresh_icons(self):
         """Refresh all action icons after theme change."""

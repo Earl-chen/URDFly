@@ -500,6 +500,11 @@ class TranslationManager:
         if hasattr(main_window, 'section_display'):
             main_window.section_display.set_title(self.tr("section_display"))
 
+        # === 浮动视图面板 tooltip ===
+        if hasattr(main_window, '_view_overlay_buttons'):
+            for btn, tip_key in main_window._view_overlay_buttons:
+                btn.setToolTip(self.tr(tip_key))
+
     @staticmethod
     def get_available_languages():
         """获取可用的语言列表"""
