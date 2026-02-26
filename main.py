@@ -121,6 +121,7 @@ class URDFViewer(QMainWindow):
         self.selected_chain = None  # Currently selected chain
         self.selected_chain_index = 0  # Index of the currently selected chain
         self.current_urdf_file = None  # Path to the currently loaded URDF file
+        self.current_parser = None     # Cached parser for efficient joint updates
         self.collision_mesh_files = None
 
         self.joint_sliders = []  # List to store joint angle sliders
@@ -871,6 +872,8 @@ class URDFViewer(QMainWindow):
                 
                 # Store the current URDF file path only after successful loading
                 self.current_urdf_file = filename
+                # Cache the parser instance for efficient joint updates
+                self.current_parser = parser
 
                 # Apply visibility settings from checkboxes to new models
                 self._apply_visibility_settings()
@@ -953,6 +956,7 @@ class URDFViewer(QMainWindow):
         self.models = []
         self.models_collision = []
         self.actor_to_link = {}
+        self.current_parser = None
 
 
         # Clear the combo box and link list
@@ -1690,26 +1694,32 @@ class URDFViewer(QMainWindow):
         """Update the model visualization with current joint angles"""
         if not self.current_urdf_file:
             return
-        
-        # Create a fresh parser instance
-        parser = self._create_parser(self.current_urdf_file)
-        
-        # Get updated robot info with joint angles
-        (link_names,
-        link_mesh_files,
-        link_mesh_transformations,
-        link_frames,
-        link_colors,
-        joint_names,
-        joint_frames,
-        joint_types,
-        joint_axes,
-        joint_parent_links,
-        joint_child_links,
-        collision_mesh_files,
-        collision_mesh_transformations,
-        joint_limits,
-        ) = parser.get_robot_info(qs=self.joint_values)
+
+        # Use cached parser's lightweight update_transforms() for MJCF
+        if self.current_parser and HAS_MJCF and isinstance(self.current_parser, MJCFParser):
+            result = self.current_parser.update_transforms(self.joint_values)
+            link_names = result['link_names']
+            link_mesh_transformations = result['link_mesh_transformations']
+            link_frames = result['link_frames']
+            collision_mesh_transformations = result['collision_mesh_transformations']
+        else:
+            # For URDF, recreate parser (lightweight) and get full info
+            parser = self._create_parser(self.current_urdf_file)
+            (link_names,
+            _link_mesh_files,
+            link_mesh_transformations,
+            link_frames,
+            _link_colors,
+            _joint_names,
+            _joint_frames,
+            _joint_types,
+            _joint_axes,
+            _joint_parent_links,
+            _joint_child_links,
+            collision_mesh_files,
+            collision_mesh_transformations,
+            _joint_limits,
+            ) = parser.get_robot_info(qs=self.joint_values)
         
         # Update existing models with new transformations
         for i, model in enumerate(self.models):
