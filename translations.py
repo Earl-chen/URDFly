@@ -227,6 +227,16 @@ TRANSLATIONS = {
     "shortcuts_title": {"zh_CN": "快捷键一览", "en": "Keyboard Shortcuts"},
     "shortcut_key": {"zh_CN": "快捷键", "en": "Shortcut"},
     "shortcut_action": {"zh_CN": "功能", "en": "Action"},
+
+    # === 相机视图 ===
+    "camera_views": {"zh_CN": "相机视图", "en": "Camera Views"},
+    "view_front": {"zh_CN": "前视图", "en": "Front View"},
+    "view_back": {"zh_CN": "后视图", "en": "Back View"},
+    "view_left": {"zh_CN": "左视图", "en": "Left View"},
+    "view_right": {"zh_CN": "右视图", "en": "Right View"},
+    "view_top": {"zh_CN": "顶视图", "en": "Top View"},
+    "view_bottom": {"zh_CN": "底视图", "en": "Bottom View"},
+    "view_isometric": {"zh_CN": "等轴测视图", "en": "Isometric View"},
     "quick_start_html": {
         "zh_CN": """<h2>URDFly 快速入门</h2>
 <h3>1. 打开模型</h3>
@@ -457,6 +467,24 @@ class TranslationManager:
             main_window.act_tutorial_mdh.setText(self.tr("tutorial_mdh"))
         if hasattr(main_window, 'act_tutorial_ik'):
             main_window.act_tutorial_ik.setText(self.tr("tutorial_ik"))
+
+        # 相机视图菜单
+        if hasattr(main_window, 'menu_camera_views'):
+            main_window.menu_camera_views.setTitle(self.tr("camera_views"))
+        if hasattr(main_window, 'act_view_front'):
+            main_window.act_view_front.setText(self.tr("view_front"))
+        if hasattr(main_window, 'act_view_back'):
+            main_window.act_view_back.setText(self.tr("view_back"))
+        if hasattr(main_window, 'act_view_left'):
+            main_window.act_view_left.setText(self.tr("view_left"))
+        if hasattr(main_window, 'act_view_right'):
+            main_window.act_view_right.setText(self.tr("view_right"))
+        if hasattr(main_window, 'act_view_top'):
+            main_window.act_view_top.setText(self.tr("view_top"))
+        if hasattr(main_window, 'act_view_bottom'):
+            main_window.act_view_bottom.setText(self.tr("view_bottom"))
+        if hasattr(main_window, 'act_view_isometric'):
+            main_window.act_view_isometric.setText(self.tr("view_isometric"))
 
         # === 工具栏动作 (同菜单共用，已更新) ===
         if hasattr(main_window, 'tb_act_reset'):

@@ -395,6 +395,45 @@ class URDFViewer(QMainWindow):
         self.act_light_theme.triggered.connect(lambda: self._switch_theme("light"))
         self.menu_view.addAction(self.act_light_theme)
 
+        # Camera views submenu
+        self.menu_view.addSeparator()
+        self.menu_camera_views = self.menu_view.addMenu(tr("camera_views"))
+
+        self.act_view_front = QAction(self._icon("view-front.svg"), tr("view_front"), self)
+        self.act_view_front.setShortcut(QKeySequence("1"))
+        self.act_view_front.triggered.connect(lambda: self._set_camera_view("front"))
+        self.menu_camera_views.addAction(self.act_view_front)
+
+        self.act_view_back = QAction(self._icon("view-back.svg"), tr("view_back"), self)
+        self.act_view_back.setShortcut(QKeySequence("Ctrl+1"))
+        self.act_view_back.triggered.connect(lambda: self._set_camera_view("back"))
+        self.menu_camera_views.addAction(self.act_view_back)
+
+        self.act_view_left = QAction(self._icon("view-left.svg"), tr("view_left"), self)
+        self.act_view_left.setShortcut(QKeySequence("3"))
+        self.act_view_left.triggered.connect(lambda: self._set_camera_view("left"))
+        self.menu_camera_views.addAction(self.act_view_left)
+
+        self.act_view_right = QAction(self._icon("view-right.svg"), tr("view_right"), self)
+        self.act_view_right.setShortcut(QKeySequence("Ctrl+3"))
+        self.act_view_right.triggered.connect(lambda: self._set_camera_view("right"))
+        self.menu_camera_views.addAction(self.act_view_right)
+
+        self.act_view_top = QAction(self._icon("view-top.svg"), tr("view_top"), self)
+        self.act_view_top.setShortcut(QKeySequence("7"))
+        self.act_view_top.triggered.connect(lambda: self._set_camera_view("top"))
+        self.menu_camera_views.addAction(self.act_view_top)
+
+        self.act_view_bottom = QAction(self._icon("view-bottom.svg"), tr("view_bottom"), self)
+        self.act_view_bottom.setShortcut(QKeySequence("Ctrl+7"))
+        self.act_view_bottom.triggered.connect(lambda: self._set_camera_view("bottom"))
+        self.menu_camera_views.addAction(self.act_view_bottom)
+
+        self.act_view_isometric = QAction(self._icon("view-isometric.svg"), tr("view_isometric"), self)
+        self.act_view_isometric.setShortcut(QKeySequence("0"))
+        self.act_view_isometric.triggered.connect(lambda: self._set_camera_view("isometric"))
+        self.menu_camera_views.addAction(self.act_view_isometric)
+
         # Tools menu
         self.menu_tools = menubar.addMenu(tr("menu_tools"))
         self.act_mdh = QAction(self._icon("table.svg"), tr("show_mdh"), self)
@@ -467,6 +506,16 @@ class URDFViewer(QMainWindow):
         self.tb_act_random.triggered.connect(self.randomize_joints)
         self.toolbar.addAction(self.tb_act_random)
 
+        # View buttons
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.act_view_front)
+        self.toolbar.addAction(self.act_view_back)
+        self.toolbar.addAction(self.act_view_left)
+        self.toolbar.addAction(self.act_view_right)
+        self.toolbar.addAction(self.act_view_top)
+        self.toolbar.addAction(self.act_view_bottom)
+        self.toolbar.addAction(self.act_view_isometric)
+
     def _create_statusbar(self):
         """Create the status bar."""
         self.status_bar = QStatusBar()
@@ -504,9 +553,55 @@ class URDFViewer(QMainWindow):
             self.act_set_joints: "sliders.svg",
             self.tb_act_reset: "rotate-ccw.svg",
             self.tb_act_random: "shuffle.svg",
+            self.act_view_front: "view-front.svg",
+            self.act_view_back: "view-back.svg",
+            self.act_view_left: "view-left.svg",
+            self.act_view_right: "view-right.svg",
+            self.act_view_top: "view-top.svg",
+            self.act_view_bottom: "view-bottom.svg",
+            self.act_view_isometric: "view-isometric.svg",
         }
         for action, icon_name in icon_map.items():
             action.setIcon(self._icon(icon_name))
+
+    def _set_camera_view(self, view_name):
+        """Set camera to a predefined view direction (Z-up coordinate system).
+
+        Args:
+            view_name: one of 'front', 'back', 'left', 'right', 'top', 'bottom', 'isometric'
+        """
+        views = {
+            'front':     {'direction': ( 1,  0,  0), 'view_up': (0, 0, 1)},
+            'back':      {'direction': (-1,  0,  0), 'view_up': (0, 0, 1)},
+            'left':      {'direction': ( 0,  1,  0), 'view_up': (0, 0, 1)},
+            'right':     {'direction': ( 0, -1,  0), 'view_up': (0, 0, 1)},
+            'top':       {'direction': ( 0,  0,  1), 'view_up': (0, 1, 0)},
+            'bottom':    {'direction': ( 0,  0, -1), 'view_up': (0, -1, 0)},
+            'isometric': {'direction': ( 1, -1,  1), 'view_up': (0, 0, 1)},
+        }
+        v = views.get(view_name)
+        if v is None:
+            return
+
+        camera = self.renderer.GetActiveCamera()
+        self.renderer.ResetCamera()
+
+        focal = list(camera.GetFocalPoint())
+        dist = camera.GetDistance()
+
+        dx, dy, dz = v['direction']
+        length = math.sqrt(dx * dx + dy * dy + dz * dz)
+        dx, dy, dz = dx / length, dy / length, dz / length
+
+        camera.SetPosition(
+            focal[0] + dx * dist,
+            focal[1] + dy * dist,
+            focal[2] + dz * dist,
+        )
+        camera.SetFocalPoint(*focal)
+        camera.SetViewUp(*v['view_up'])
+        self.renderer.ResetCameraClippingRange()
+        self.vtk_widget.GetRenderWindow().Render()
 
     def _show_about(self):
         QMessageBox.about(self, tr("about"), tr("about_text"))
@@ -543,6 +638,13 @@ class URDFViewer(QMainWindow):
             ("Ctrl+F", tr("search")),
             ("F3", tr("next")),
             ("Shift+F3", tr("previous")),
+            ("1", tr("view_front")),
+            ("Ctrl+1", tr("view_back")),
+            ("3", tr("view_left")),
+            ("Ctrl+3", tr("view_right")),
+            ("7", tr("view_top")),
+            ("Ctrl+7", tr("view_bottom")),
+            ("0", tr("view_isometric")),
         ]
 
         table = QTableWidget(len(shortcuts), 2)
@@ -669,14 +771,24 @@ class URDFViewer(QMainWindow):
                     )
                 
                 # Create models for each collision link
+                # Build collision→link_name mapping from parser data
+                collision_link_names = []
+                if hasattr(parser, 'links'):
+                    for lname in link_names:
+                        link_info = parser.links.get(lname)
+                        if link_info and link_info.get("collision_mesh") is not None:
+                            collision_link_names.append(lname)
+
                 for i in range(len(collision_mesh_files)):
+                    coll_link = collision_link_names[i] if i < len(collision_link_names) else None
                     self.add_urdf_model(
                         f"collision_{i}",
                         collision_mesh_files[i],
                         collision_mesh_transformations[i],
                         None,
                         None,
-                        model_type='collision'
+                        model_type='collision',
+                        link_name=coll_link,
                     )
                     
                 
@@ -714,7 +826,7 @@ class URDFViewer(QMainWindow):
         if filename:
             self.load_urdf_file(filename)
 
-    def add_urdf_model(self, name, mesh_file, mesh_transform, frame, color, model_type='visual'):
+    def add_urdf_model(self, name, mesh_file, mesh_transform, frame, color, model_type='visual', link_name=None):
 
         """Add a URDF model to the scene"""
         try:
@@ -733,6 +845,8 @@ class URDFViewer(QMainWindow):
             # Build actor → link_name mapping for drag interaction
             if model_type == 'visual':
                 self.actor_to_link[id(model.actor)] = name
+            elif model_type == 'collision' and link_name:
+                self.actor_to_link[id(model.actor)] = link_name
 
             # Add the axes actor to the renderer
             if model.axes_actor is not None:
@@ -1025,6 +1139,14 @@ class URDFViewer(QMainWindow):
             (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_com_markers(parser, link_names, link_frames)
 
+            # Register CoM actors for drag interaction
+            for info in self.inertia_visualizer.com_actor_info:
+                self.actor_to_link[id(info['actor'])] = info['link_name']
+        else:
+            # Unregister CoM actors
+            for info in self.inertia_visualizer.com_actor_info:
+                self.actor_to_link.pop(id(info['actor']), None)
+
         self.inertia_visualizer.set_com_visibility(visible)
         self.vtk_widget.GetRenderWindow().Render()
 
@@ -1044,6 +1166,14 @@ class URDFViewer(QMainWindow):
             parser = self._create_parser(self.current_urdf_file)
             (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
+
+            # Register inertia actors for drag interaction
+            for info in self.inertia_visualizer.inertia_actor_info:
+                self.actor_to_link[id(info['actor'])] = info['link_name']
+        else:
+            # Unregister inertia actors
+            for info in self.inertia_visualizer.inertia_actor_info:
+                self.actor_to_link.pop(id(info['actor']), None)
 
         self.inertia_visualizer.set_inertia_visibility(visible)
         self.vtk_widget.GetRenderWindow().Render()
@@ -1650,14 +1780,23 @@ class URDFViewer(QMainWindow):
                 )
                 
             # Create models for each collision link
+            collision_link_names = []
+            if hasattr(parser, 'links'):
+                for lname in link_names:
+                    link_info = parser.links.get(lname)
+                    if link_info and link_info.get("collision_mesh") is not None:
+                        collision_link_names.append(lname)
+
             for i in range(len(collision_mesh_files)):
+                coll_link = collision_link_names[i] if i < len(collision_link_names) else None
                 self.add_urdf_model(
                     f"",
                     collision_mesh_files[i],
                     collision_mesh_transformations[i],
                     None,
                     None,
-                    model_type='collision'
+                    model_type='collision',
+                    link_name=coll_link,
                 )
                 
             self.cb_collision.setChecked(True)
