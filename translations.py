@@ -267,8 +267,17 @@ TRANSLATIONS = {
 </ul>
 <h3>6. 视图 &amp; 主题</h3>
 <ul>
+<li>3D 视口右上角有 <b>浮动视图面板</b>，提供 7 个相机预设视图（前 / 后 / 左 / 右 / 顶 / 底 / 等轴测）</li>
+<li>也可通过数字快捷键快速切换视图：<code>1</code> 前视图、<code>3</code> 左视图、<code>7</code> 顶视图、<code>0</code> 等轴测；按住 <code>Ctrl</code> 切换为后/右/底视图</li>
 <li><b>视图</b> 菜单切换深色/浅色主题</li>
 <li>可隐藏/显示左右面板获得更大 3D 视口</li>
+</ul>
+<h3>7. 快捷键</h3>
+<ul>
+<li><code>Ctrl+O</code> 打开模型　<code>Ctrl+E</code> 编辑 XML　<code>Ctrl+M</code> MDH 参数　<code>Ctrl+T</code> 拓扑图</li>
+<li><code>Ctrl+R</code> 重置关节　<code>Ctrl+Q</code> 退出　<code>Ctrl+F</code> XML 编辑器搜索</li>
+<li><code>1</code>/<code>Ctrl+1</code> 前/后　<code>3</code>/<code>Ctrl+3</code> 左/右　<code>7</code>/<code>Ctrl+7</code> 顶/底　<code>0</code> 等轴测</li>
+<li>完整列表请查看 <b>帮助 → 快捷键一览</b></li>
 </ul>""",
         "en": """<h2>URDFly Quick Start</h2>
 <h3>1. Open a Model</h3>
@@ -299,8 +308,17 @@ TRANSLATIONS = {
 </ul>
 <h3>6. View &amp; Themes</h3>
 <ul>
+<li>A <b>floating view panel</b> in the top-right corner of the 3D viewport offers 7 camera presets (Front / Back / Left / Right / Top / Bottom / Isometric)</li>
+<li>Quick-switch views with number keys: <code>1</code> Front, <code>3</code> Left, <code>7</code> Top, <code>0</code> Isometric; hold <code>Ctrl</code> for Back / Right / Bottom</li>
 <li>Switch between dark/light themes from the <b>View</b> menu</li>
 <li>Hide/show left/right panels for a larger 3D viewport</li>
+</ul>
+<h3>7. Keyboard Shortcuts</h3>
+<ul>
+<li><code>Ctrl+O</code> Open　<code>Ctrl+E</code> Edit XML　<code>Ctrl+M</code> MDH　<code>Ctrl+T</code> Topology</li>
+<li><code>Ctrl+R</code> Reset Joints　<code>Ctrl+Q</code> Quit　<code>Ctrl+F</code> Search in XML Editor</li>
+<li><code>1</code>/<code>Ctrl+1</code> Front/Back　<code>3</code>/<code>Ctrl+3</code> Left/Right　<code>7</code>/<code>Ctrl+7</code> Top/Bottom　<code>0</code> Isometric</li>
+<li>See the full list at <b>Help → Keyboard Shortcuts</b></li>
 </ul>"""
     },
 }
