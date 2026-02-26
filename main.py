@@ -47,7 +47,7 @@ from PyQt5.QtWidgets import (
 from xml_editor import XMLEditor
 from mdh_dialog import MDHDialog
 from decomp_dialog import DecompDialog
-from PyQt5.QtCore import Qt, QUrl, QSize, QEvent
+from PyQt5.QtCore import Qt, QUrl, QSize, QEvent, QSettings
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QIcon, QDesktopServices
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
@@ -131,6 +131,8 @@ class URDFViewer(QMainWindow):
         self.display_in_degrees = False  # False: rad, True: deg
         self.inertia_visualizer = None  # Will be created after renderer init
         self.actor_to_link = {}  # actor -> link_name mapping for drag interaction
+        self.settings = QSettings("URDFly", "URDFly")
+        self.max_recent_files = 10
         self.init_ui()
         
 
@@ -373,6 +375,9 @@ class URDFViewer(QMainWindow):
         self.act_edit.triggered.connect(self.edit_urdf_file)
         self.menu_file.addAction(self.act_edit)
 
+        self.menu_recent = self.menu_file.addMenu(tr("recent_files"))
+        self._update_recent_files_menu()
+
         self.menu_file.addSeparator()
 
         self.act_quit = QAction(tr("quit"), self)
@@ -494,7 +499,13 @@ class URDFViewer(QMainWindow):
         self.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.addToolBar(self.toolbar)
 
-        self.toolbar.addAction(self.act_open)
+        self.tb_open_btn = QToolButton(self.toolbar)
+        self.tb_open_btn.setDefaultAction(self.act_open)
+        self.tb_open_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.tb_open_btn.setPopupMode(QToolButton.MenuButtonPopup)
+        self.tb_open_btn.setMenu(self.menu_recent)
+        self.toolbar.addWidget(self.tb_open_btn)
+
         self.toolbar.addAction(self.act_edit)
         self.toolbar.addAction(self.act_mdh)
         self.toolbar.addAction(self.act_decomp)
@@ -872,6 +883,7 @@ class URDFViewer(QMainWindow):
                 
                 # Store the current URDF file path only after successful loading
                 self.current_urdf_file = filename
+                self._add_recent_file(filename)
                 # Cache the parser instance for efficient joint updates
                 self.current_parser = parser
 
@@ -894,6 +906,36 @@ class URDFViewer(QMainWindow):
         
         if filename:
             self.load_urdf_file(filename)
+
+    def _add_recent_file(self, filepath):
+        """Add a file path to the recent files list in QSettings."""
+        files = self.settings.value("recent_files", [], type=list)
+        filepath = os.path.abspath(filepath)
+        if filepath in files:
+            files.remove(filepath)
+        files.insert(0, filepath)
+        files = files[:self.max_recent_files]
+        self.settings.setValue("recent_files", files)
+        self._update_recent_files_menu()
+
+    def _update_recent_files_menu(self):
+        """Rebuild the recent files submenu from QSettings."""
+        self.menu_recent.clear()
+        files = self.settings.value("recent_files", [], type=list)
+        if not files:
+            act = self.menu_recent.addAction(tr("current_file_none"))
+            act.setEnabled(False)
+            return
+        for filepath in files:
+            act = self.menu_recent.addAction(filepath)
+            act.triggered.connect(lambda checked, f=filepath: self._open_recent_file(f))
+
+    def _open_recent_file(self, filepath):
+        """Open a model file from the recent files list."""
+        if os.path.exists(filepath):
+            self.load_urdf_file(filepath)
+        else:
+            QMessageBox.warning(self, tr("warning"), tr("failed_to_load_file", filepath))
 
     def add_urdf_model(self, name, mesh_file, mesh_transform, frame, color, model_type='visual', link_name=None):
 

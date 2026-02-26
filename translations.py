@@ -201,6 +201,7 @@ TRANSLATIONS = {
     "menu_tools": {"zh_CN": "工具(&T)", "en": "&Tools"},
     "menu_help": {"zh_CN": "帮助(&H)", "en": "&Help"},
     "quit": {"zh_CN": "退出", "en": "Quit"},
+    "recent_files": {"zh_CN": "最近打开", "en": "Recent Files"},
     "toggle_left_panel": {"zh_CN": "切换左侧面板", "en": "Toggle Left Panel"},
     "toggle_right_panel": {"zh_CN": "切换右侧面板", "en": "Toggle Right Panel"},
     "theme_dark": {"zh_CN": "深色主题", "en": "Dark Theme"},
@@ -459,6 +460,9 @@ class TranslationManager:
             main_window.act_edit.setText(self.tr("edit_urdf"))
         if hasattr(main_window, 'act_quit'):
             main_window.act_quit.setText(self.tr("quit"))
+        if hasattr(main_window, 'menu_recent'):
+            main_window.menu_recent.setTitle(self.tr("recent_files"))
+            main_window._update_recent_files_menu()
         if hasattr(main_window, 'act_toggle_left'):
             main_window.act_toggle_left.setText(self.tr("toggle_left_panel"))
         if hasattr(main_window, 'act_toggle_right'):
