@@ -657,11 +657,9 @@ class MJCFParser:
             joint_axes,
             joint_parent_links,
             joint_child_links,
-            joint_limits,
             collision_mesh_files,
             collision_mesh_transformations,
-            collision_link_names,
-            collision_geometries,
+            joint_limits,
         )
 
     def get_visual_geometries(self):
