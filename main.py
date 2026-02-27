@@ -48,7 +48,7 @@ from xml_editor import XMLEditor
 from mdh_dialog import MDHDialog
 from decomp_dialog import DecompDialog
 from PyQt5.QtCore import Qt, QUrl, QSize, QEvent, QSettings
-from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QIcon, QDesktopServices
+from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QIcon, QDesktopServices, QColor
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 
@@ -57,7 +57,7 @@ from urdf_vtk_model import URDFModel
 from simplify_mesh import create_detailed_approximation
 from translations import TranslationManager, tr, get_translation_manager
 from geometry_factory import GeometryFactory
-from topology_dialog import TopologyDialog
+from topology_dialog import TopologyDialog, JOINT_COLORS
 from inertia_visualizer import InertiaVisualizer
 from drag_interaction_style import DragJointInteractorStyle
 from theme import ThemeManager, themed_icon
@@ -150,6 +150,7 @@ class URDFViewer(QMainWindow):
         self.joint_sliders = []  # List to store joint angle sliders
         self.joint_values = []  # List to store joint angle values
         self.revolute_joints = []  # List to store revolute joints
+        self.all_joints = []  # List to store all joints (name, type)
         self.joint_value_labels = []  # List to store joint value labels
         self.display_in_degrees = False  # False: rad, True: deg
         self.inertia_visualizer = None  # Will be created after renderer init
@@ -347,6 +348,10 @@ class URDFViewer(QMainWindow):
         self.units_combo.currentTextChanged.connect(self.on_units_changed)
         buttons_layout.addWidget(self.units_combo)
         joint_group_layout.addLayout(buttons_layout)
+
+        # 关节信息总览（可折叠）
+        self.section_joint_info = CollapsibleSection(tr("section_joint_info"), expanded=False)
+        joint_group_layout.addWidget(self.section_joint_info)
 
         # Joint scroll area
         joint_scroll_area = QScrollArea()
@@ -896,7 +901,14 @@ class URDFViewer(QMainWindow):
                             'lower': limit['lower'],
                             'upper': limit['upper'],
                         })
-                
+
+                # Store all joints for joint info overview
+                self.all_joints = [
+                    {'name': joint_names[i], 'type': joint_types[i]}
+                    for i in range(len(joint_names))
+                ]
+                self.create_joint_overview()
+
                 # Create joint sliders
                 self.create_joint_sliders()
                 
@@ -1122,7 +1134,16 @@ class URDFViewer(QMainWindow):
         
         # Clear joint sliders
         self.clear_joint_sliders()
-        
+
+        # Clear joint info overview
+        self.all_joints = []
+        layout = self.section_joint_info.content_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
         # Clear MDH frames
         for actor in self.mdh_frames_actors:
             self.renderer.RemoveActor(actor)
@@ -1404,9 +1425,13 @@ class URDFViewer(QMainWindow):
             # Register CoM actors for drag interaction
             for info in self.inertia_visualizer.com_actor_info:
                 self.actor_to_link[id(info['actor'])] = info['link_name']
+            for info in self.inertia_visualizer.com_axes_actor_info:
+                self.actor_to_link[id(info['actor'])] = info['link_name']
         else:
             # Unregister CoM actors
             for info in self.inertia_visualizer.com_actor_info:
+                self.actor_to_link.pop(id(info['actor']), None)
+            for info in self.inertia_visualizer.com_axes_actor_info:
                 self.actor_to_link.pop(id(info['actor']), None)
 
         self.inertia_visualizer.set_com_visibility(visible)
@@ -1741,6 +1766,39 @@ class URDFViewer(QMainWindow):
         # Update the rendering
         self.vtk_widget.GetRenderWindow().Render()
 
+    def create_joint_overview(self):
+        """Create joint info overview panel showing all joints and their types"""
+        # Clear existing content
+        layout = self.section_joint_info.content_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        for joint in self.all_joints:
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 1, 0, 1)
+            row_layout.setSpacing(4)
+
+            name_label = QLabel(joint['name'])
+            name_label.setStyleSheet("font-size: 11px;")
+            row_layout.addWidget(name_label, 1)
+
+            jtype = joint['type']
+            color = JOINT_COLORS.get(jtype.lower(), QColor("#808080"))
+            hex_color = color.name()
+            type_label = QLabel(jtype)
+            type_label.setStyleSheet(
+                f"font-size: 10px; color: {hex_color}; "
+                f"border: 1px solid {hex_color}; border-radius: 3px; "
+                f"padding: 1px 4px;"
+            )
+            row_layout.addWidget(type_label, 0)
+
+            self.section_joint_info.add_widget(row)
+
     def create_joint_sliders(self):
         """Create compact sliders for controlling joint angles"""
         # Clear existing sliders
@@ -2037,7 +2095,14 @@ class URDFViewer(QMainWindow):
                         'lower': limit['lower'],
                         'upper': limit['upper'],
                     })
-            
+
+            # Store all joints for joint info overview
+            self.all_joints = [
+                {'name': joint_names[i], 'type': joint_types[i]}
+                for i in range(len(joint_names))
+            ]
+            self.create_joint_overview()
+
             # Create joint sliders
             self.create_joint_sliders()
             

@@ -220,6 +220,7 @@ TRANSLATIONS = {
     "section_robot_structure": {"zh_CN": "机器人结构", "en": "Robot Structure"},
     "section_transparency": {"zh_CN": "透明度", "en": "Transparency"},
     "section_display": {"zh_CN": "显示设置", "en": "Display Settings"},
+    "section_joint_info": {"zh_CN": "关节信息", "en": "Joint Info"},
 
     # === 帮助菜单扩展 ===
     "quick_start_guide": {"zh_CN": "快速入门指南", "en": "Quick Start Guide"},
@@ -539,6 +540,8 @@ class TranslationManager:
             main_window.section_transparency.set_title(self.tr("section_transparency"))
         if hasattr(main_window, 'section_display'):
             main_window.section_display.set_title(self.tr("section_display"))
+        if hasattr(main_window, 'section_joint_info'):
+            main_window.section_joint_info.set_title(self.tr("section_joint_info"))
 
         # === 浮动视图面板 tooltip ===
         if hasattr(main_window, '_view_overlay_buttons'):

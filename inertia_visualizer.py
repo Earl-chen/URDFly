@@ -33,6 +33,10 @@ class InertiaVisualizer:
         self.com_actors = []
         self.com_actor_info = []  # {'actor', 'link_name', 'T_com_rel'}
 
+        # 质心坐标系轴
+        self.com_axes_actors = []
+        self.com_axes_actor_info = []  # {'actor', 'link_name', 'T_com_rel'}
+
         # 惯量盒
         self.inertia_actors = []
         self.inertia_actor_info = []  # {'actor', 'link_name', 'T_com_rel'}
@@ -47,6 +51,11 @@ class InertiaVisualizer:
             self.renderer.RemoveActor(actor)
         self.com_actors = []
         self.com_actor_info = []
+
+        for actor in self.com_axes_actors:
+            self.renderer.RemoveActor(actor)
+        self.com_axes_actors = []
+        self.com_axes_actor_info = []
 
         for actor in self.inertia_actors:
             self.renderer.RemoveActor(actor)
@@ -67,6 +76,11 @@ class InertiaVisualizer:
             self.renderer.RemoveActor(actor)
         self.com_actors = []
         self.com_actor_info = []
+
+        for actor in self.com_axes_actors:
+            self.renderer.RemoveActor(actor)
+        self.com_axes_actors = []
+        self.com_axes_actor_info = []
 
         # 跟踪已处理的连杆
         processed_links = set()
@@ -102,6 +116,26 @@ class InertiaVisualizer:
             self.com_actors.append(actor)
             self.com_actor_info.append({
                 'actor': actor,
+                'link_name': link_name,
+                'T_com_rel': T_com
+            })
+
+            # 创建质心坐标系轴
+            axes_actor = vtk.vtkAxesActor()
+            axes_actor.SetTotalLength(0.03, 0.03, 0.03)
+            axes_actor.SetShaftType(0)  # 圆柱体
+            axes_actor.SetCylinderRadius(0.008)
+            axes_actor.AxisLabelsOff()
+
+            vtk_transform = vtk.vtkTransform()
+            vtk_transform.SetMatrix(T_world.flatten())
+            axes_actor.SetUserTransform(vtk_transform)
+            axes_actor.SetVisibility(self.show_com)
+
+            self.renderer.AddActor(axes_actor)
+            self.com_axes_actors.append(axes_actor)
+            self.com_axes_actor_info.append({
+                'actor': axes_actor,
                 'link_name': link_name,
                 'T_com_rel': T_com
             })
@@ -213,6 +247,20 @@ class InertiaVisualizer:
                 vtk_transform.SetMatrix(T_world.flatten())
                 actor.SetUserTransform(vtk_transform)
 
+        # 更新质心坐标系轴
+        for info in self.com_axes_actor_info:
+            actor = info['actor']
+            link_name = info['link_name']
+            T_com_rel = info['T_com_rel']
+
+            if link_name in link_name_to_frame:
+                link_frame = link_name_to_frame[link_name]
+                T_world = link_frame @ T_com_rel
+
+                vtk_transform = vtk.vtkTransform()
+                vtk_transform.SetMatrix(T_world.flatten())
+                actor.SetUserTransform(vtk_transform)
+
         # 更新惯量盒
         for info in self.inertia_actor_info:
             actor = info['actor']
@@ -231,6 +279,8 @@ class InertiaVisualizer:
         """设置质心标记可见性"""
         self.show_com = visible
         for actor in self.com_actors:
+            actor.SetVisibility(visible)
+        for actor in self.com_axes_actors:
             actor.SetVisibility(visible)
 
     def set_inertia_visibility(self, visible):
