@@ -135,18 +135,40 @@ class URDFParser:
                 geometry = collision.find("geometry")
                 if geometry is not None:
                     mesh = geometry.find("mesh")
-                    if link.get('name') in self.links:       
+                    box = geometry.find("box")
+                    sphere = geometry.find("sphere")
+                    cylinder = geometry.find("cylinder")
+
+                    if link.get('name') in self.links:
+                        self.links[link.get("name")]['collision_origin'] = self.parse_origin(collision.find("origin"))
+
                         if mesh is not None:
                             filename = mesh.get("filename")
-                            # Store the mesh filename and its visual properties
+                            self.links[link.get("name")]['collision_type'] = 'mesh'
                             self.links[link.get("name")]['collision_mesh'] = filename
-                            self.links[link.get("name")]['collision_origin'] = self.parse_origin(collision.find("origin"))
-
-                        else:
+                        elif box is not None:
+                            size = list(map(float, box.get("size", "0 0 0").split()))
+                            self.links[link.get("name")]['collision_type'] = 'box'
+                            self.links[link.get("name")]['collision_box_size'] = size
                             self.links[link.get("name")]['collision_mesh'] = None
-                            self.links[link.get("name")]['collision_origin'] = None
+                        elif sphere is not None:
+                            radius = float(sphere.get("radius", "0"))
+                            self.links[link.get("name")]['collision_type'] = 'sphere'
+                            self.links[link.get("name")]['collision_sphere_radius'] = radius
+                            self.links[link.get("name")]['collision_mesh'] = None
+                        elif cylinder is not None:
+                            radius = float(cylinder.get("radius", "0"))
+                            length = float(cylinder.get("length", "0"))
+                            self.links[link.get("name")]['collision_type'] = 'cylinder'
+                            self.links[link.get("name")]['collision_cylinder_radius'] = radius
+                            self.links[link.get("name")]['collision_cylinder_length'] = length
+                            self.links[link.get("name")]['collision_mesh'] = None
+                        else:
+                            self.links[link.get("name")]['collision_type'] = None
+                            self.links[link.get("name")]['collision_mesh'] = None
                 else:
                     if link.get('name') in self.links:
+                        self.links[link.get("name")]['collision_type'] = None
                         self.links[link.get("name")]['collision_mesh'] = None
                         self.links[link.get("name")]['collision_origin'] = None
 
@@ -399,6 +421,8 @@ class URDFParser:
         
         collision_mesh_files = []
         collision_mesh_transformations = []
+        collision_link_names = []
+        collision_geometries = []
         
         # For joint frames
         joint_names = []
@@ -438,18 +462,46 @@ class URDFParser:
             link_frames.append(T)
             link_colors.append(color)
                 
-            # Process collision
-            if link_info.get("collision_mesh") is not None:
-                mesh_file = resolve_mesh_uri(link_info["collision_mesh"], self.mesh_dir)
-                
-                T_collision = self.compute_transformation(
-                    link_info["collision_origin"]["rpy"], link_info["collision_origin"]["xyz"]
-                )
+            # Process collision - handle all geometry types
+            collision_type = link_info.get("collision_type")
+            if collision_type is not None:
+                if link_info.get("collision_origin") is not None:
+                    T_collision = self.compute_transformation(
+                        link_info["collision_origin"]["rpy"], link_info["collision_origin"]["xyz"]
+                    )
+                else:
+                    T_collision = self.compute_transformation([0, 0, 0], [0, 0, 0])
 
-                # Combine with the link's transformation
-                T_total = T @ T_collision
-                collision_mesh_files.append(mesh_file)
-                collision_mesh_transformations.append(T_total)
+                T_total_coll = T @ T_collision
+
+                if collision_type == 'mesh':
+                    mesh_file = resolve_mesh_uri(link_info["collision_mesh"], self.mesh_dir)
+                    collision_mesh_files.append(mesh_file)
+                    collision_mesh_transformations.append(T_total_coll)
+                    collision_link_names.append(name)
+                    collision_geometries.append({'type': 'mesh', 'file': mesh_file})
+
+                elif collision_type == 'box':
+                    size = link_info.get("collision_box_size", [0, 0, 0])
+                    collision_mesh_files.append(None)
+                    collision_mesh_transformations.append(T_total_coll)
+                    collision_link_names.append(name)
+                    collision_geometries.append({'type': 'box', 'size': size})
+
+                elif collision_type == 'sphere':
+                    radius = link_info.get("collision_sphere_radius", 0)
+                    collision_mesh_files.append(None)
+                    collision_mesh_transformations.append(T_total_coll)
+                    collision_link_names.append(name)
+                    collision_geometries.append({'type': 'sphere', 'radius': radius})
+
+                elif collision_type == 'cylinder':
+                    radius = link_info.get("collision_cylinder_radius", 0)
+                    length = link_info.get("collision_cylinder_length", 0)
+                    collision_mesh_files.append(None)
+                    collision_mesh_transformations.append(T_total_coll)
+                    collision_link_names.append(name)
+                    collision_geometries.append({'type': 'cylinder', 'radius': radius, 'length': length})
 
             
         # Process each joint
@@ -495,6 +547,8 @@ class URDFParser:
             collision_mesh_files,
             collision_mesh_transformations,
             joint_limits,
+            collision_link_names,
+            collision_geometries,
         )
     
     def build_multiple_trees(self):

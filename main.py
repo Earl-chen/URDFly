@@ -70,6 +70,29 @@ except ImportError:
     HAS_MJCF = False
 
 
+class _SimpleCollisionModel:
+    """Lightweight wrapper for primitive collision geometry actors.
+
+    Provides the same interface as URDFModel for use in models_collision list.
+    """
+
+    def __init__(self, actor):
+        self.actor = actor
+        self.axes_actor = None
+        self.text_actor = None
+        self.name = ""
+        self.transparency = 1.0
+
+    def set_transparency(self, transparency):
+        self.transparency = transparency
+        self.actor.GetProperty().SetOpacity(transparency)
+
+    def apply_transform(self, transform_matrix):
+        vtk_transform = vtk.vtkTransform()
+        vtk_transform.SetMatrix(transform_matrix.flatten())
+        self.actor.SetUserTransform(vtk_transform)
+
+
 class DragDropVTKWidget(QVTKRenderWindowInteractor):
     """Custom VTK widget that supports drag-and-drop of URDF/MJCF files"""
 
@@ -815,6 +838,8 @@ class URDFViewer(QMainWindow):
                 collision_mesh_files,
                 collision_mesh_transformations,
                 joint_limits,
+                collision_link_names,
+                collision_geometries,
                 ) = parser.get_robot_info()
 
                 # Store revolute joints for slider controls
@@ -848,26 +873,24 @@ class URDFViewer(QMainWindow):
                         link_colors[i],
                     )
                 
-                # Create models for each collision link
-                # Build collision→link_name mapping from parser data
-                collision_link_names = []
-                if hasattr(parser, 'links'):
-                    for lname in link_names:
-                        link_info = parser.links.get(lname)
-                        if link_info and link_info.get("collision_mesh") is not None:
-                            collision_link_names.append(lname)
-
-                for i in range(len(collision_mesh_files)):
+                # Create models for each collision
+                for i in range(len(collision_geometries)):
                     coll_link = collision_link_names[i] if i < len(collision_link_names) else None
-                    self.add_urdf_model(
-                        f"collision_{i}",
-                        collision_mesh_files[i],
-                        collision_mesh_transformations[i],
-                        None,
-                        None,
-                        model_type='collision',
-                        link_name=coll_link,
-                    )
+                    geom = collision_geometries[i]
+                    if geom['type'] == 'mesh':
+                        self.add_urdf_model(
+                            f"collision_{i}",
+                            collision_mesh_files[i],
+                            collision_mesh_transformations[i],
+                            None,
+                            None,
+                            model_type='collision',
+                            link_name=coll_link,
+                        )
+                    else:
+                        self._add_collision_primitive_model(
+                            geom, collision_mesh_transformations[i], coll_link,
+                        )
                     
                 
                 # use link mesh files to be decomposed
@@ -978,6 +1001,32 @@ class URDFViewer(QMainWindow):
             QMessageBox.warning(
                 self, tr("warning"), tr("load_model_failed", name, str(e))
             )
+
+    def _add_collision_primitive_model(self, geom, transform_matrix, link_name=None):
+        """Add a collision primitive (box/sphere/cylinder) to the scene.
+
+        Args:
+            geom: dict with 'type' and geometry parameters
+            transform_matrix: 4x4 transformation matrix
+            link_name: optional link name for drag interaction mapping
+        """
+        geom_type = geom['type']
+        if geom_type == 'box':
+            actor = GeometryFactory.create_collision_box(geom['size'], transform_matrix)
+        elif geom_type == 'sphere':
+            actor = GeometryFactory.create_collision_sphere(geom['radius'], transform_matrix)
+        elif geom_type == 'cylinder':
+            actor = GeometryFactory.create_collision_cylinder(
+                geom['radius'], geom['length'], transform_matrix)
+        else:
+            return
+
+        model = _SimpleCollisionModel(actor)
+        self.models_collision.append(model)
+        self.renderer.AddActor(actor)
+
+        if link_name:
+            self.actor_to_link[id(actor)] = link_name
 
     def clear_models(self):
         """Clear all models from the scene"""
@@ -1214,7 +1263,7 @@ class URDFViewer(QMainWindow):
             parser = self._create_parser(self.current_urdf_file)
             (_, _, _, _, _,
              joint_names, joint_frames, joint_types, joint_axes,
-             _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+             _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
 
         # Create axis arrows for each revolute and continuous joint
         for joint_name, joint_frame, joint_type, axis in zip(
@@ -1254,7 +1303,7 @@ class URDFViewer(QMainWindow):
 
             # Create CoM markers
             parser = self._create_parser(self.current_urdf_file)
-            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_com_markers(parser, link_names, link_frames)
 
             # Register CoM actors for drag interaction
@@ -1282,7 +1331,7 @@ class URDFViewer(QMainWindow):
 
             # Create inertia boxes
             parser = self._create_parser(self.current_urdf_file)
-            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
 
             # Register inertia actors for drag interaction
@@ -1767,6 +1816,8 @@ class URDFViewer(QMainWindow):
             collision_mesh_files,
             collision_mesh_transformations,
             _joint_limits,
+            _collision_link_names,
+            _collision_geometries,
             ) = parser.get_robot_info(qs=self.joint_values)
         
         # Update existing models with new transformations
@@ -1870,7 +1921,9 @@ class URDFViewer(QMainWindow):
             joint_child_links,
             collision_mesh_files,
             collision_mesh_transformations,
-            joint_limits,) = parser.get_robot_info()
+            joint_limits,
+            collision_link_names,
+            collision_geometries,) = parser.get_robot_info()
 
             # Store revolute joints for slider controls
             self.revolute_joints = []
@@ -1903,25 +1956,24 @@ class URDFViewer(QMainWindow):
                     link_colors[i],
                 )
                 
-            # Create models for each collision link
-            collision_link_names = []
-            if hasattr(parser, 'links'):
-                for lname in link_names:
-                    link_info = parser.links.get(lname)
-                    if link_info and link_info.get("collision_mesh") is not None:
-                        collision_link_names.append(lname)
-
-            for i in range(len(collision_mesh_files)):
+            # Create models for each collision
+            for i in range(len(collision_geometries)):
                 coll_link = collision_link_names[i] if i < len(collision_link_names) else None
-                self.add_urdf_model(
-                    f"",
-                    collision_mesh_files[i],
-                    collision_mesh_transformations[i],
-                    None,
-                    None,
-                    model_type='collision',
-                    link_name=coll_link,
-                )
+                geom = collision_geometries[i]
+                if geom['type'] == 'mesh':
+                    self.add_urdf_model(
+                        f"",
+                        collision_mesh_files[i],
+                        collision_mesh_transformations[i],
+                        None,
+                        None,
+                        model_type='collision',
+                        link_name=coll_link,
+                    )
+                else:
+                    self._add_collision_primitive_model(
+                        geom, collision_mesh_transformations[i], coll_link,
+                    )
                 
             self.cb_collision.setChecked(True)
             self.transparency_slider.setValue(100)
@@ -1999,14 +2051,17 @@ class URDFViewer(QMainWindow):
         # CoM markers - recreate if checked
         if self.cb_com.isChecked() and self.current_urdf_file:
             parser = self._create_parser(self.current_urdf_file)
-            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_com_markers(parser, link_names, link_frames)
 
         # Inertia boxes - recreate if checked
         if self.cb_inertia.isChecked() and self.current_urdf_file:
             parser = self._create_parser(self.current_urdf_file)
-            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
+            (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
             self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
+
+        # Apply current transparency setting to newly loaded models
+        self.apply_transparency()
 
         self.vtk_widget.GetRenderWindow().Render()
             

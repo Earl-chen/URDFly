@@ -660,6 +660,8 @@ class MJCFParser:
             collision_mesh_files,
             collision_mesh_transformations,
             joint_limits,
+            collision_link_names,
+            collision_geometries,
         )
 
     def get_visual_geometries(self):
