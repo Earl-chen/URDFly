@@ -29,8 +29,10 @@ class GeometryFactory:
     """几何体创建工厂类"""
 
     # 默认颜色定义
-    DEFAULT_COLLISION_COLOR = (0.3, 0.6, 1.0)  # 浅蓝色
-    DEFAULT_COLLISION_OPACITY = 0.4
+    DEFAULT_COLLISION_COLOR = (0.2, 0.7, 0.3)  # 绿色
+    DEFAULT_COLLISION_OPACITY = 0.5
+    DEFAULT_INERTIA_COLOR = (0.9, 0.4, 0.1)    # 暖橙色
+    DEFAULT_INERTIA_OPACITY = 0.5
     DEFAULT_VISUAL_OPACITY = 1.0
 
     @staticmethod
@@ -284,62 +286,60 @@ class GeometryFactory:
         return text_actor
 
     @staticmethod
-    def create_collision_box(size, transform_matrix):
+    def create_collision_box(size, transform_matrix, color=None, opacity=None):
         """创建碰撞体长方体
 
         Args:
             size: (x, y, z) 尺寸
             transform_matrix: 4x4 变换矩阵
+            color: (r, g, b) 颜色，默认 DEFAULT_COLLISION_COLOR
+            opacity: 透明度，默认 DEFAULT_COLLISION_OPACITY
 
         Returns:
             vtkActor
         """
-        actor = GeometryFactory.create_box(
-            size,
-            GeometryFactory.DEFAULT_COLLISION_COLOR,
-            GeometryFactory.DEFAULT_COLLISION_OPACITY
-        )
+        c = color if color is not None else GeometryFactory.DEFAULT_COLLISION_COLOR
+        o = opacity if opacity is not None else GeometryFactory.DEFAULT_COLLISION_OPACITY
+        actor = GeometryFactory.create_box(size, c, o)
         GeometryFactory.apply_transform(actor, transform_matrix)
         return actor
 
     @staticmethod
-    def create_collision_sphere(radius, transform_matrix):
+    def create_collision_sphere(radius, transform_matrix, color=None, opacity=None):
         """创建碰撞体球体
 
         Args:
             radius: 半径
             transform_matrix: 4x4 变换矩阵
+            color: (r, g, b) 颜色，默认 DEFAULT_COLLISION_COLOR
+            opacity: 透明度，默认 DEFAULT_COLLISION_OPACITY
 
         Returns:
             vtkActor
         """
-        actor = GeometryFactory.create_sphere(
-            radius,
-            GeometryFactory.DEFAULT_COLLISION_COLOR,
-            GeometryFactory.DEFAULT_COLLISION_OPACITY,
-            resolution=16
-        )
+        c = color if color is not None else GeometryFactory.DEFAULT_COLLISION_COLOR
+        o = opacity if opacity is not None else GeometryFactory.DEFAULT_COLLISION_OPACITY
+        actor = GeometryFactory.create_sphere(radius, c, o, resolution=16)
         GeometryFactory.apply_transform(actor, transform_matrix)
         return actor
 
     @staticmethod
-    def create_collision_cylinder(radius, length, transform_matrix):
+    def create_collision_cylinder(radius, length, transform_matrix, color=None, opacity=None):
         """创建碰撞体圆柱体
 
         Args:
             radius: 半径
             length: 长度
             transform_matrix: 4x4 变换矩阵
+            color: (r, g, b) 颜色，默认 DEFAULT_COLLISION_COLOR
+            opacity: 透明度，默认 DEFAULT_COLLISION_OPACITY
 
         Returns:
             vtkActor
         """
-        actor = GeometryFactory.create_cylinder(
-            radius, length,
-            GeometryFactory.DEFAULT_COLLISION_COLOR,
-            GeometryFactory.DEFAULT_COLLISION_OPACITY,
-            resolution=16
-        )
+        c = color if color is not None else GeometryFactory.DEFAULT_COLLISION_COLOR
+        o = opacity if opacity is not None else GeometryFactory.DEFAULT_COLLISION_OPACITY
+        actor = GeometryFactory.create_cylinder(radius, length, c, o, resolution=16)
         GeometryFactory.apply_transform(actor, transform_matrix)
         return actor
 
@@ -543,19 +543,21 @@ class GeometryFactory:
 
     @staticmethod
     def create_inertia_box(box_size, transform_matrix,
-                           color=(0.3, 0.6, 1.0), opacity=0.4):
+                           color=None, opacity=None):
         """创建惯量盒
 
         Args:
             box_size: (x, y, z) 尺寸
             transform_matrix: 4x4 变换矩阵
-            color: 颜色
-            opacity: 透明度
+            color: 颜色，默认 DEFAULT_INERTIA_COLOR
+            opacity: 透明度，默认 DEFAULT_INERTIA_OPACITY
 
         Returns:
             vtkActor
         """
-        actor = GeometryFactory.create_box(box_size, color, opacity)
+        c = color if color is not None else GeometryFactory.DEFAULT_INERTIA_COLOR
+        o = opacity if opacity is not None else GeometryFactory.DEFAULT_INERTIA_OPACITY
+        actor = GeometryFactory.create_box(box_size, c, o)
         GeometryFactory.apply_transform(actor, transform_matrix)
         return actor
 

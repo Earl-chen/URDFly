@@ -36,6 +36,8 @@ TRANSLATIONS = {
     "show_joint_axes": {"zh_CN": "显示关节轴", "en": "Show Joint Axes"},
     "show_com": {"zh_CN": "显示质心 (COM)", "en": "Show CoM"},
     "show_inertia": {"zh_CN": "显示惯量", "en": "Show Inertia"},
+    "collision_color_tooltip": {"zh_CN": "碰撞体颜色", "en": "Collision Color"},
+    "inertia_color_tooltip": {"zh_CN": "惯量颜色", "en": "Inertia Color"},
 
     # === 关节控制 ===
     "joints_control": {"zh_CN": "关节控制", "en": "Joints Control"},
@@ -386,6 +388,14 @@ class TranslationManager:
         if hasattr(main_window, 'select_chain_label'):
             main_window.select_chain_label.setText(self.tr("select_chain"))
 
+        # 更新运动链下拉框中的文字
+        if hasattr(main_window, 'chain_combo') and hasattr(main_window, 'chains'):
+            for i, chain in enumerate(main_window.chains):
+                if i < main_window.chain_combo.count():
+                    main_window.chain_combo.setItemText(
+                        i, self.tr("chain_pattern").format(i + 1, chain['name'])
+                    )
+
         # 更新连杆标签
         if hasattr(main_window, 'links_label'):
             main_window.links_label.setText(self.tr("links"))
@@ -415,10 +425,18 @@ class TranslationManager:
             main_window.cb_mdh_frames.setText(self.tr("show_mdh_frames"))
         if hasattr(main_window, 'cb_collision'):
             main_window.cb_collision.setText(self.tr("show_collision"))
+        if hasattr(main_window, 'cb_joint_axes'):
+            main_window.cb_joint_axes.setText(self.tr("show_joint_axes"))
         if hasattr(main_window, 'cb_com'):
             main_window.cb_com.setText(self.tr("show_com"))
         if hasattr(main_window, 'cb_inertia'):
             main_window.cb_inertia.setText(self.tr("show_inertia"))
+
+        # 颜色色块按钮 tooltip
+        if hasattr(main_window, 'collision_color_btn'):
+            main_window.collision_color_btn.setToolTip(self.tr("collision_color_tooltip"))
+        if hasattr(main_window, 'inertia_color_btn'):
+            main_window.inertia_color_btn.setToolTip(self.tr("inertia_color_tooltip"))
 
         # 更新关节控制标签
         if hasattr(main_window, 'joint_label'):

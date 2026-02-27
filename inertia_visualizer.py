@@ -106,7 +106,8 @@ class InertiaVisualizer:
                 'T_com_rel': T_com
             })
 
-    def create_inertia_boxes(self, parser, link_names, link_frames, joint_values=None):
+    def create_inertia_boxes(self, parser, link_names, link_frames, joint_values=None,
+                             color=None, opacity=None):
         """为所有连杆创建惯量盒
 
         Args:
@@ -114,6 +115,8 @@ class InertiaVisualizer:
             link_names: 连杆名称列表
             link_frames: 连杆坐标系变换矩阵列表
             joint_values: 关节角度值（用于更新位置）
+            color: (r, g, b) 颜色，默认使用 GeometryFactory.DEFAULT_INERTIA_COLOR
+            opacity: 透明度，默认使用 GeometryFactory.DEFAULT_INERTIA_OPACITY
         """
         # 清除现有惯量盒
         for actor in self.inertia_actors:
@@ -170,7 +173,8 @@ class InertiaVisualizer:
 
             # 创建惯量盒
             actor = GeometryFactory.create_inertia_box(
-                (box_x, box_y, box_z), T_world
+                (box_x, box_y, box_z), T_world,
+                color=color, opacity=opacity
             )
             actor.SetVisibility(self.show_inertia)
 

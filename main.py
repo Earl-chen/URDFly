@@ -61,7 +61,7 @@ from topology_dialog import TopologyDialog
 from inertia_visualizer import InertiaVisualizer
 from drag_interaction_style import DragJointInteractorStyle
 from theme import ThemeManager, themed_icon
-from widgets import CollapsibleSection
+from widgets import CollapsibleSection, ColorSwatchButton
 
 try:
     from mjcf_parser import MJCFParser
@@ -156,6 +156,14 @@ class URDFViewer(QMainWindow):
         self.actor_to_link = {}  # actor -> link_name mapping for drag interaction
         self.settings = QSettings("URDFly", "URDFly")
         self.max_recent_files = 10
+        self.collision_color = self._load_color_setting(
+            "collision_color",
+            (*GeometryFactory.DEFAULT_COLLISION_COLOR, GeometryFactory.DEFAULT_COLLISION_OPACITY),
+        )
+        self.inertia_color = self._load_color_setting(
+            "inertia_color",
+            (*GeometryFactory.DEFAULT_INERTIA_COLOR, GeometryFactory.DEFAULT_INERTIA_OPACITY),
+        )
         self.init_ui()
         
 
@@ -242,6 +250,11 @@ class URDFViewer(QMainWindow):
         self.cb_collision.setChecked(True)
         self.cb_collision.stateChanged.connect(self.toggle_collision)
 
+        self.collision_color_btn = ColorSwatchButton(
+            *self.collision_color[:3], self.collision_color[3])
+        self.collision_color_btn.setToolTip(tr("collision_color_tooltip"))
+        self.collision_color_btn.colorChanged.connect(self._on_collision_color_changed)
+
         self.cb_joint_axes = QCheckBox(tr("show_joint_axes"))
         self.cb_joint_axes.setChecked(False)
         self.cb_joint_axes.stateChanged.connect(self.toggle_joint_axes)
@@ -254,9 +267,36 @@ class URDFViewer(QMainWindow):
         self.cb_inertia.setChecked(False)
         self.cb_inertia.stateChanged.connect(self.toggle_inertia)
 
-        for cb in (self.cb_visual, self.cb_link_frames, self.cb_mdh_frames,
-                   self.cb_collision, self.cb_joint_axes, self.cb_com, self.cb_inertia):
+        self.inertia_color_btn = ColorSwatchButton(
+            *self.inertia_color[:3], self.inertia_color[3])
+        self.inertia_color_btn.setToolTip(tr("inertia_color_tooltip"))
+        self.inertia_color_btn.colorChanged.connect(self._on_inertia_color_changed)
+
+        # 添加 checkbox（碰撞体和惯量行带颜色按钮）
+        for cb in (self.cb_visual, self.cb_link_frames, self.cb_mdh_frames):
             self.section_display.add_widget(cb)
+
+        collision_row_widget = QWidget()
+        collision_row_layout = QHBoxLayout(collision_row_widget)
+        collision_row_layout.setContentsMargins(0, 0, 0, 0)
+        collision_row_layout.setSpacing(4)
+        collision_row_layout.addWidget(self.cb_collision)
+        collision_row_layout.addWidget(self.collision_color_btn)
+        collision_row_layout.addStretch()
+        self.section_display.add_widget(collision_row_widget)
+
+        self.section_display.add_widget(self.cb_joint_axes)
+        self.section_display.add_widget(self.cb_com)
+
+        inertia_row_widget = QWidget()
+        inertia_row_layout = QHBoxLayout(inertia_row_widget)
+        inertia_row_layout.setContentsMargins(0, 0, 0, 0)
+        inertia_row_layout.setSpacing(4)
+        inertia_row_layout.addWidget(self.cb_inertia)
+        inertia_row_layout.addWidget(self.inertia_color_btn)
+        inertia_row_layout.addStretch()
+        self.section_display.add_widget(inertia_row_widget)
+
         left_layout.addWidget(self.section_display)
 
         left_layout.addStretch()
@@ -930,6 +970,22 @@ class URDFViewer(QMainWindow):
         if filename:
             self.load_urdf_file(filename)
 
+    def _load_color_setting(self, key, default):
+        """从 QSettings 读取颜色元组 (r, g, b, a)，读取失败则返回 default。"""
+        val = self.settings.value(key)
+        if val is not None:
+            try:
+                color = tuple(float(v) for v in val)
+                if len(color) == 4:
+                    return color
+            except (TypeError, ValueError):
+                pass
+        return default
+
+    def _save_color_setting(self, key, color):
+        """将颜色元组 (r, g, b, a) 保存到 QSettings。"""
+        self.settings.setValue(key, list(color))
+
     def _add_recent_file(self, filepath):
         """Add a file path to the recent files list in QSettings."""
         files = self.settings.value("recent_files", [], type=list)
@@ -964,8 +1020,14 @@ class URDFViewer(QMainWindow):
 
         """Add a URDF model to the scene"""
         try:
+            # Apply collision color for mesh-based collision models with no explicit color
+            effective_color = color
+            if model_type == 'collision' and color is None:
+                r, g, b, a = self.collision_color
+                effective_color = (r, g, b, a)
+
             # Create a new URDF model with axis text (using link name as the text)
-            model = URDFModel(name, mesh_file, mesh_transform, frame, color, axis_text=name)
+            model = URDFModel(name, mesh_file, mesh_transform, frame, effective_color, axis_text=name)
 
              # Add the model to our list
             if model_type == 'visual':
@@ -1010,14 +1072,18 @@ class URDFViewer(QMainWindow):
             transform_matrix: 4x4 transformation matrix
             link_name: optional link name for drag interaction mapping
         """
+        r, g, b, a = self.collision_color
         geom_type = geom['type']
         if geom_type == 'box':
-            actor = GeometryFactory.create_collision_box(geom['size'], transform_matrix)
+            actor = GeometryFactory.create_collision_box(
+                geom['size'], transform_matrix, color=(r, g, b), opacity=a)
         elif geom_type == 'sphere':
-            actor = GeometryFactory.create_collision_sphere(geom['radius'], transform_matrix)
+            actor = GeometryFactory.create_collision_sphere(
+                geom['radius'], transform_matrix, color=(r, g, b), opacity=a)
         elif geom_type == 'cylinder':
             actor = GeometryFactory.create_collision_cylinder(
-                geom['radius'], geom['length'], transform_matrix)
+                geom['radius'], geom['length'], transform_matrix,
+                color=(r, g, b), opacity=a)
         else:
             return
 
@@ -1166,15 +1232,44 @@ class URDFViewer(QMainWindow):
 
     def toggle_collision(self, state):
         visible = state == Qt.Checked
-        
+
         for model in self.models_collision:
             model.actor.SetVisibility(visible)
             if model.axes_actor is not None:
                 model.axes_actor.SetVisibility(visible)
             if hasattr(model, 'text_actor') and model.text_actor is not None:
                 model.text_actor.SetVisibility(visible)
-        
+
         # Update the rendering
+        self.vtk_widget.GetRenderWindow().Render()
+
+    def _on_collision_color_changed(self, r, g, b, a):
+        """Handle collision color picker change."""
+        self.collision_color = (r, g, b, a)
+        self._save_color_setting("collision_color", self.collision_color)
+        self._apply_collision_color()
+
+    def _on_inertia_color_changed(self, r, g, b, a):
+        """Handle inertia color picker change."""
+        self.inertia_color = (r, g, b, a)
+        self._save_color_setting("inertia_color", self.inertia_color)
+        self._apply_inertia_color()
+
+    def _apply_collision_color(self):
+        """Apply current collision_color to all collision model actors."""
+        r, g, b, a = self.collision_color
+        for model in self.models_collision:
+            model.actor.GetProperty().SetColor(r, g, b)
+            model.actor.GetProperty().SetOpacity(a)
+        self.vtk_widget.GetRenderWindow().Render()
+
+    def _apply_inertia_color(self):
+        """Apply current inertia_color to all inertia box actors."""
+        r, g, b, a = self.inertia_color
+        if self.inertia_visualizer:
+            for actor in self.inertia_visualizer.inertia_actors:
+                actor.GetProperty().SetColor(r, g, b)
+                actor.GetProperty().SetOpacity(a)
         self.vtk_widget.GetRenderWindow().Render()
 
     def toggle_link_frames(self, state):
@@ -1332,7 +1427,10 @@ class URDFViewer(QMainWindow):
             # Create inertia boxes
             parser = self._create_parser(self.current_urdf_file)
             (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
-            self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
+            r, g, b, a = self.inertia_color
+            self.inertia_visualizer.create_inertia_boxes(
+                parser, link_names, link_frames,
+                color=(r, g, b), opacity=a)
 
             # Register inertia actors for drag interaction
             for info in self.inertia_visualizer.inertia_actor_info:
@@ -2058,7 +2156,10 @@ class URDFViewer(QMainWindow):
         if self.cb_inertia.isChecked() and self.current_urdf_file:
             parser = self._create_parser(self.current_urdf_file)
             (link_names, _, _, link_frames, _, _, _, _, _, _, _, _, _, _, _, _) = parser.get_robot_info(qs=self.joint_values)
-            self.inertia_visualizer.create_inertia_boxes(parser, link_names, link_frames)
+            r, g, b, a = self.inertia_color
+            self.inertia_visualizer.create_inertia_boxes(
+                parser, link_names, link_frames,
+                color=(r, g, b), opacity=a)
 
         # Apply current transparency setting to newly loaded models
         self.apply_transparency()

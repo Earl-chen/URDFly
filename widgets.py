@@ -3,12 +3,14 @@
 可复用自定义控件
 
 CollapsibleSection - 可折叠面板（Blender 风格）
+ColorSwatchButton  - 颜色色块按钮（带 alpha 通道拾色器）
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QSizePolicy
+    QWidget, QVBoxLayout, QPushButton, QSizePolicy, QColorDialog
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QColor
 
 
 class CollapsibleSection(QWidget):
@@ -63,3 +65,77 @@ class CollapsibleSection(QWidget):
     def add_layout(self, layout):
         """向内容区域添加布局。"""
         self.content_layout.addLayout(layout)
+
+
+class ColorSwatchButton(QPushButton):
+    """颜色色块按钮：显示当前颜色，点击弹出带 alpha 的拾色器。
+
+    信号:
+        colorChanged(float, float, float, float) — r, g, b, a (0-1)
+    """
+
+    colorChanged = pyqtSignal(float, float, float, float)
+
+    def __init__(self, r=1.0, g=1.0, b=1.0, a=1.0, parent=None):
+        super().__init__(parent)
+        self._r, self._g, self._b, self._a = r, g, b, a
+        self._hovered = False
+        self.setFixedSize(16, 16)
+        self.setCursor(Qt.PointingHandCursor)
+        self.clicked.connect(self._pick_color)
+        self._update_style()
+
+    # --- public helpers ---
+    def set_color(self, r, g, b, a=None):
+        """编程式设置颜色（不触发信号）。"""
+        self._r, self._g, self._b = r, g, b
+        if a is not None:
+            self._a = a
+        self._update_style()
+
+    def get_color(self):
+        """返回 (r, g, b, a) float 元组。"""
+        return (self._r, self._g, self._b, self._a)
+
+    # --- event overrides ---
+    def enterEvent(self, event):
+        self._hovered = True
+        self._update_style()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._update_style()
+        super().leaveEvent(event)
+
+    # --- internals ---
+    def _update_style(self):
+        r8 = int(self._r * 255)
+        g8 = int(self._g * 255)
+        b8 = int(self._b * 255)
+        a8 = int(self._a * 255)
+        border_alpha = "0.45" if self._hovered else "0.15"
+        self.setStyleSheet(
+            "QPushButton {"
+            f"  min-width:0; max-width:16px;"
+            f"  min-height:0; max-height:16px;"
+            f"  padding:0; margin:0;"
+            f"  border:1.5px solid rgba(255,255,255,{border_alpha});"
+            f"  border-radius:8px;"
+            f"  background-color: rgba({r8},{g8},{b8},{a8});"
+            "}"
+        )
+
+    def _pick_color(self):
+        initial = QColor.fromRgbF(self._r, self._g, self._b, self._a)
+        color = QColorDialog.getColor(
+            initial, self, "",
+            QColorDialog.ShowAlphaChannel
+        )
+        if color.isValid():
+            self._r = color.redF()
+            self._g = color.greenF()
+            self._b = color.blueF()
+            self._a = color.alphaF()
+            self._update_style()
+            self.colorChanged.emit(self._r, self._g, self._b, self._a)
