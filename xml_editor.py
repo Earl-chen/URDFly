@@ -267,7 +267,7 @@ class XMLEditor(QMainWindow):
                 self.file_path = file_path
                 self.update_file_path_label()
         except Exception as e:
-            QMessageBox.critical(self, tr("error"), tr("failed_to_load_file", str(e)))
+            QMessageBox.critical(self, tr("error"), tr("failed_to_load_file", None, str(e)))
 
     def save_file(self):
         """Save the current file"""
@@ -281,7 +281,7 @@ class XMLEditor(QMainWindow):
                 file.write(content)
             QMessageBox.information(self, tr("success"), tr("file_saved_successfully"))
         except Exception as e:
-            QMessageBox.critical(self, tr("error"), tr("failed_to_save_file", str(e)))
+            QMessageBox.critical(self, tr("error"), tr("failed_to_save_file", None, str(e)))
 
     def save_file_as(self):
         """Save the current file with a new name"""

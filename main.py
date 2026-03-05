@@ -856,7 +856,7 @@ class URDFViewer(QMainWindow):
                 raise ImportError("MJCF 支持需要安装 mujoco: pip install mujoco")
             return MJCFParser(filename)
         else:
-            raise ValueError(tr("unsupported_format", ext))
+            raise ValueError(tr("unsupported_format", None, ext))
 
     def load_urdf_file(self, filename):
         """Load a URDF/MJCF file and visualize the robot"""
@@ -970,7 +970,7 @@ class URDFViewer(QMainWindow):
 
             except Exception as e:
                 QMessageBox.critical(
-                    self, tr("error"), tr("load_urdf_failed", str(e))
+                    self, tr("error"), tr("load_urdf_failed", None, str(e))
                 )
 
     def open_urdf_file(self):
@@ -1026,7 +1026,7 @@ class URDFViewer(QMainWindow):
         if os.path.exists(filepath):
             self.load_urdf_file(filepath)
         else:
-            QMessageBox.warning(self, tr("warning"), tr("failed_to_load_file", filepath))
+            QMessageBox.warning(self, tr("warning"), tr("failed_to_load_file", None, filepath))
 
     def add_urdf_model(self, name, mesh_file, mesh_transform, frame, color, model_type='visual', link_name=None):
 
@@ -1073,7 +1073,7 @@ class URDFViewer(QMainWindow):
 
         except Exception as e:
             QMessageBox.warning(
-                self, tr("warning"), tr("load_model_failed", name, str(e))
+                self, tr("warning"), tr("load_model_failed", None, name, str(e))
             )
 
     def _add_collision_primitive_model(self, geom, transform_matrix, link_name=None):
@@ -1653,7 +1653,7 @@ class URDFViewer(QMainWindow):
                 return
             n = len(self.revolute_joints)
             if len(vals) != n:
-                QMessageBox.warning(dialog, tr("warning"), tr("expected_values", n, len(vals)))
+                QMessageBox.warning(dialog, tr("warning"), tr("expected_values", None, n, len(vals)))
                 return
             # Convert to radians if needed
             if units_combo.currentText() == "deg":
@@ -2050,9 +2050,11 @@ class URDFViewer(QMainWindow):
             # Create a temporary file to store the XML content
             
             if '_temp.urdf' not in self.current_urdf_file:
-                temp_path = self.current_urdf_file.lower().replace('.urdf', '_temp.urdf')
+                # 仅对扩展名做大小写无关替换，保留目录路径原始大小写
+                base, ext = os.path.splitext(self.current_urdf_file)
+                temp_path = base + '_temp.urdf'
             else:
-                temp_path = self.current_urdf_file.lower()
+                temp_path = self.current_urdf_file
             
             with open(temp_path, 'w', encoding='utf-8')as temp_file:
                 temp_file.write(xml_content)
@@ -2160,7 +2162,7 @@ class URDFViewer(QMainWindow):
             
         except Exception as e:
             QMessageBox.critical(
-                self, tr("error"), tr("update_model_failed", str(e))
+                self, tr("error"), tr("update_model_failed", None, str(e))
             )
 
     def update_current_file_label(self):

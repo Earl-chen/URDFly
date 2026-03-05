@@ -123,14 +123,14 @@ class DecompDialog(QDialog):
             QMessageBox.information(
                 self,
                 tr("decomposition_complete"),
-                tr("decomposition_success", len(all_decomposed_files))
+                tr("decomposition_success", None, len(all_decomposed_files))
             )
         except Exception as e:
             # Show error message if decomposition fails
             QMessageBox.critical(
                 self,
                 tr("decomposition_error"),
-                tr("decomposition_error_msg", str(e))
+                tr("decomposition_error_msg", None, str(e))
             )
     
     def get_decomposed_mesh_files(self):

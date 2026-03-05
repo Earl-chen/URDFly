@@ -350,7 +350,7 @@ class MDHDialog(QDialog):
             try:
                 with open(file_path, 'w') as f:
                     # Write header
-                    f.write(tr("mdh_file_header", self.chain_name) + "\n")
+                    f.write(tr("mdh_file_header", None, self.chain_name) + "\n")
                     f.write("=" * 50 + "\n\n")
 
                     # Write column headers
@@ -364,11 +364,11 @@ class MDHDialog(QDialog):
                         f.write(f"{joint_name:<10} {theta:<4.8f} {d:<4.8f} {a:<4.8f} {alpha:<4.8f}\n")
 
                     f.write("\n" + "=" * 50 + "\n")
-                    f.write(tr("mdh_total_joints", len(self.mdh_parameters)) + "\n")
+                    f.write(tr("mdh_total_joints", None, len(self.mdh_parameters)) + "\n")
 
-                QMessageBox.information(self, tr("success"), tr("mdh_saved", file_path))
+                QMessageBox.information(self, tr("success"), tr("mdh_saved", None, file_path))
             except Exception as e:
-                QMessageBox.critical(self, tr("error"), tr("failed_to_save_mdh", str(e)))
+                QMessageBox.critical(self, tr("error"), tr("failed_to_save_mdh", None, str(e)))
 
     def on_copy_header(self):
         """Copy header code to clipboard"""
