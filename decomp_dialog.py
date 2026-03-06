@@ -66,7 +66,11 @@ class DecompDialog(QDialog):
     # ------------------------------------------------------------------
     def __init__(self, parent, collision_mesh_files, link_names, urdf_file):
         super().__init__(parent)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowCloseButtonHint
+            | Qt.WindowMinMaxButtonsHint
+        )
 
         self._collision_mesh_files = collision_mesh_files or []
         self._link_names = link_names or []
