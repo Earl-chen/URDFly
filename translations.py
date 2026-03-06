@@ -88,6 +88,14 @@ TRANSLATIONS = {
     "decomposition_success": {"zh_CN": "成功分解 {} 个网格文件。", "en": "Successfully decomposed {} mesh files."},
     "decomposition_error": {"zh_CN": "分解错误", "en": "Decomposition Error"},
     "decomposition_error_msg": {"zh_CN": "分解过程中出错：{}", "en": "Error during decomposition: {}"},
+    "vhacd_missing_warning": {
+        "zh_CN": "⚠ 未检测到 vhacdx 模块。V-HACD 凸分解不可用，将退化为单凸包近似。\n请运行 pip install vhacdx 以启用完整凸分解。",
+        "en": "⚠ vhacdx module not found. V-HACD convex decomposition is unavailable, will fall back to single convex hull.\nRun pip install vhacdx to enable full decomposition."
+    },
+    "vhacd_missing_confirm": {
+        "zh_CN": "vhacdx 模块未安装，所有网格将退化为单凸包近似（精度较低）。\n是否仍要继续？",
+        "en": "vhacdx module is not installed. All meshes will fall back to single convex hull approximation (lower accuracy).\nContinue anyway?"
+    },
 
     # === XML 编辑器 ===
     "urdf_editor": {"zh_CN": "URDF 编辑器", "en": "URDF Editor"},

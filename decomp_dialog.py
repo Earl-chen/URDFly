@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QMessageBox
 )
 from PyQt5.QtCore import Qt
-from simplify_mesh import create_detailed_approximation
+from simplify_mesh import create_detailed_approximation, is_vhacd_available
 from translations import tr
 
 class DecompDialog(QDialog):
@@ -35,6 +35,14 @@ class DecompDialog(QDialog):
 
         # Main layout
         main_layout = QVBoxLayout(self)
+
+        # Check V-HACD availability and show warning if missing
+        self._vhacd_available = is_vhacd_available()
+        if not self._vhacd_available:
+            warn_label = QLabel(tr("vhacd_missing_warning"))
+            warn_label.setWordWrap(True)
+            warn_label.setStyleSheet("QLabel { color: #FFB74D; padding: 6px; border: 1px solid #FFB74D; border-radius: 4px; }")
+            main_layout.addWidget(warn_label)
 
         # Create table for mesh files and maxConvexHulls values
         self.mesh_table = QTableWidget()
@@ -139,7 +147,19 @@ class DecompDialog(QDialog):
     
     def accept(self):
         """Override accept to return the decomposed mesh files"""
-        # If decomposition wasn't performed, show a warning
+        # Warn user if V-HACD is not available
+        if not self._vhacd_available and self.decomposed_mesh_files is None:
+            reply = QMessageBox.warning(
+                self,
+                tr("warning"),
+                tr("vhacd_missing_confirm"),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+        # If decomposition wasn't performed, perform it now
         if self.decomposed_mesh_files is None:
             self.perform_decomposition()
         

@@ -1,6 +1,13 @@
 import trimesh
 import os
 import numpy as np
+import importlib
+
+
+def is_vhacd_available():
+    """Check if V-HACD backend (vhacdx) is available."""
+    return importlib.util.find_spec("vhacdx") is not None
+
 
 def create_detailed_approximation(mesh_files, maxConvexHulls=64):
     """
@@ -30,6 +37,7 @@ def create_detailed_approximation(mesh_files, maxConvexHulls=64):
                 maxConvexHulls=maxConvexHulls,         # Maximum number of convex hulls to generate
 
             )
+            print(f"  V-HACD succeeded: {len(convex_pieces) if isinstance(convex_pieces, list) else 1} pieces")
             
             # If convex_pieces is a list, combine them into a single mesh
             if isinstance(convex_pieces, list):

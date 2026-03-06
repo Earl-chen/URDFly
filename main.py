@@ -2240,7 +2240,7 @@ class URDFViewer(QMainWindow):
                 self, tr("warning"), tr("no_collision_meshes")
             )
             return
-        
+
         # Create and show the decomposition dialog
         dialog = DecompDialog(self, self.collision_mesh_files)
         
