@@ -143,9 +143,24 @@ URDF → Modified DH 参数自动转换，以表格形式显示。支持多运�
 
 ### 凸分解碰撞体
 
-- 使用 V-HACD 算法将网格分解为凸包
-- 每个连杆独立配置最大凸包数（1-256）
-- 分解后自动更新 URDF 文件中的碰撞体定义
+三状态交互式对话框，使用 V-HACD 算法将碰撞网格分解为凸包集合，供物理引擎高效碰撞检测。
+
+**配置状态**：
+- 表格展示所有碰撞网格的连杆名、文件名、原始面数
+- 每行独立复选框与 maxConvexHulls 参数（1-256）
+- 全局凸包数设置、全选/取消全选
+- 内置可折叠参数说明面板（解释凸包数含义、面数变化原因与性能权衡）
+
+**处理中状态**：
+- QThread 后台线程执行分解，UI 不冻结
+- 进度条 + 当前处理网格实时提示
+- 支持中途取消
+
+**结果状态**：
+- 显示结果凸包数、结果面数、面数缩减比
+- 状态标记：V-HACD 成功（绿色）/ 退化为单凸包（橙色）/ 错误（红色）/ 已跳过（灰色）
+- 退化项数量汇总警告
+- 一键"应用到 URDF"：ElementTree 直接修改碰撞 mesh 引用，保存为临时文件并自动重新加载模型，无需手动编辑 XML
 
 ![凸分解碰撞体](assets/convex_decomp.png)
 
@@ -159,7 +174,7 @@ URDF → Modified DH 参数自动转换，以表格形式显示。支持多运�
 ### 中英文国际化
 
 - 运行时切换中文 / English，无需重启
-- 覆盖 230+ 翻译键，包括所有菜单、按钮、提示信息、帮助文档
+- 覆盖 250+ 翻译键，包括所有菜单、按钮、提示信息、帮助文档
 
 ## 安装
 
@@ -177,6 +192,12 @@ pip install numpy sympy pyqt5 vtk anytree transformations trimesh
 
 ```bash
 pip install mujoco
+```
+
+可选依赖（用于 V-HACD 高质量凸分解，未安装时退化为单凸包）：
+
+```bash
+pip install vhacdx
 ```
 
 ## 使用方法
@@ -207,10 +228,11 @@ URDFly/
 ├── xml_editor.py               # XML 编辑器（语法高亮、查找替换、π 值插入、QToolBar）
 ├── mdh_dialog.py               # MDH 参数对话框（表格显示、代码生成、代码高亮）
 ├── topology_dialog.py          # 拓扑有向图对话框（缩放/平移、PNG/SVG 导出、深色主题）
-├── decomp_dialog.py            # 凸分解配置对话框
+├── decomp_dialog.py            # 凸分解三状态对话框（配置→处理→结果）
+├── decomp_worker.py            # 凸分解后台线程（QThread + trimesh）
 ├── inertia_visualizer.py       # 质心标记与惯量盒可视化
 ├── drag_interaction_style.py   # 拖拽交互控制关节角度
-├── translations.py             # 中英文国际化（230+ 翻译键）
+├── translations.py             # 中英文国际化（250+ 翻译键）
 ├── simplify_mesh.py            # 网格凸分解（trimesh + V-HACD）
 ├── icons/                      # SVG 图标集（Lucide 风格）
 ├── codegen/                    # 代码生成模块
@@ -229,7 +251,8 @@ URDFly/
 │   └── poppy/                  # Poppy 人形机器人（URDF + STL）
 ├── docs/                       # 文档
 │   ├── MDH_Parameters_Tutorial.md
-│   └── Analytical_IK_Tutorial.md
+│   ├── Analytical_IK_Tutorial.md
+│   └── Convex_Decomposition_Collision.md
 └── assets/                     # 截图资源
 ```
 
@@ -237,6 +260,7 @@ URDFly/
 
 - [MDH 参数教程](docs/MDH_Parameters_Tutorial.md)
 - [解析逆运动学教程](docs/Analytical_IK_Tutorial.md)
+- [凸分解碰撞体流程分析](docs/Convex_Decomposition_Collision.md)
 
 ## 已知限制
 
