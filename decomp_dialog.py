@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QProgressBar,
     QApplication,
+    QTextBrowser,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
@@ -26,6 +27,7 @@ import trimesh
 from simplify_mesh import is_vhacd_available
 from decomp_worker import MeshInfo, DecompWorker
 from translations import tr
+from widgets import CollapsibleSection
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +101,17 @@ class DecompDialog(QDialog):
             self._warn_label.hide()
         else:
             self._warn_label.setText(tr("vhacd_missing_warning"))
+
+        # --- Collapsible help panel ---
+        self._help_section = CollapsibleSection(
+            tr("decomp_help_title"), parent=self, expanded=False
+        )
+        help_browser = QTextBrowser()
+        help_browser.setOpenExternalLinks(True)
+        help_browser.setMaximumHeight(260)
+        help_browser.setHtml(tr("decomp_help_html"))
+        self._help_section.add_widget(help_browser)
+        layout.addWidget(self._help_section)
 
         # --- Global settings row ---
         global_row = QHBoxLayout()

@@ -120,6 +120,57 @@ TRANSLATIONS = {
         "en": "⚠ {} mesh(es) fell back to single convex hull (V-HACD failed or unavailable)"
     },
     "decomp_applied_success": {"zh_CN": "凸分解结果已应用到 URDF", "en": "Decomposition applied to URDF"},
+    "decomp_help_title": {"zh_CN": "参数说明", "en": "Parameter Guide"},
+    "decomp_help_html": {
+        "zh_CN": """<h3>maxConvexHulls（最大凸包数）</h3>
+<p>物理引擎的碰撞检测对<b>凸体</b>有高效算法（GJK/EPA），但不能直接处理凹面体。
+凸分解的作用是把一个非凸 mesh 拆成多块凸体拼合，使物理仿真可以高效处理。</p>
+<p><b>maxConvexHulls</b> 控制最多拆成几块凸体：</p>
+<ul>
+<li><code>= 1</code> — 整个 mesh 用一个凸包裹住（最粗糙，速度最快）</li>
+<li><code>= 8~32</code> — 适合大多数机器人连杆（推荐）</li>
+<li><code>= 64~256</code> — 复杂曲面零件（精度高，碰撞计算量大）</li>
+</ul>
+<h3>为什么结果面数可能比原始更多？</h3>
+<p>凸分解<b>不是减面工具</b>，它的目标是将凹面体转为凸体集合。面数可能增加的原因：</p>
+<ol>
+<li><b>切割封口</b> — 切割处需要新三角形来保持每块水密</li>
+<li><b>凸包膨胀</b> — 凹陷区域被"填平"为凸面，产生新表面</li>
+<li><b>无共享顶点</b> — 每块凸体独立封闭，边界几何重复</li>
+</ol>
+<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse; margin:6px 0;">
+<tr><th>maxConvexHulls</th><th>形状精度</th><th>面数趋势</th><th>碰撞开销</th></tr>
+<tr><td align="center">1</td><td>最差</td><td>通常最少</td><td>最低</td></tr>
+<tr><td align="center">8 ~ 16</td><td>中等</td><td>中等</td><td>中等</td></tr>
+<tr><td align="center">32 ~ 64</td><td>较好</td><td>可能超过原始</td><td>较高</td></tr>
+<tr><td align="center">128+</td><td>接近原始</td><td>通常远超原始</td><td>很高</td></tr>
+</table>
+<p style="color:#9E9E9E;">核心权衡：<b>碰撞精度 vs 仿真性能</b>。关键不在于面数少，而在于每块都是凸的。</p>""",
+        "en": """<h3>maxConvexHulls</h3>
+<p>Physics engines use efficient algorithms (GJK/EPA) for <b>convex</b> shapes but cannot handle concave meshes directly.
+Convex decomposition splits a non-convex mesh into multiple convex pieces so physics simulation can process them efficiently.</p>
+<p><b>maxConvexHulls</b> controls the maximum number of convex pieces:</p>
+<ul>
+<li><code>= 1</code> — wraps the entire mesh in one convex hull (coarsest, fastest)</li>
+<li><code>= 8~32</code> — suitable for most robot links (recommended)</li>
+<li><code>= 64~256</code> — complex curved parts (higher accuracy, heavier collision cost)</li>
+</ul>
+<h3>Why can result faces exceed the original?</h3>
+<p>Convex decomposition is <b>not a mesh simplification tool</b>. Its goal is converting concave geometry into convex piece sets. Face count may increase because:</p>
+<ol>
+<li><b>Cut sealing</b> — new triangles are needed at cut planes to keep each piece watertight</li>
+<li><b>Convex inflation</b> — concave regions are "filled" into convex surfaces, creating new geometry</li>
+<li><b>No shared vertices</b> — each piece is an independent closed solid, duplicating boundary geometry</li>
+</ol>
+<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse; margin:6px 0;">
+<tr><th>maxConvexHulls</th><th>Shape Accuracy</th><th>Face Count Trend</th><th>Collision Cost</th></tr>
+<tr><td align="center">1</td><td>Lowest</td><td>Usually fewest</td><td>Lowest</td></tr>
+<tr><td align="center">8 ~ 16</td><td>Medium</td><td>Moderate</td><td>Medium</td></tr>
+<tr><td align="center">32 ~ 64</td><td>Good</td><td>May exceed original</td><td>Higher</td></tr>
+<tr><td align="center">128+</td><td>Near original</td><td>Usually far exceeds</td><td>Very high</td></tr>
+</table>
+<p style="color:#9E9E9E;">Core trade-off: <b>collision accuracy vs simulation performance</b>. What matters is not fewer faces, but that every piece is convex.</p>"""
+    },
 
     # === XML 编辑器 ===
     "urdf_editor": {"zh_CN": "URDF 编辑器", "en": "URDF Editor"},
