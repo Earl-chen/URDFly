@@ -945,8 +945,13 @@ class URDFViewer(QMainWindow):
                         )
                     
                 
-                # use link mesh files to be decomposed
-                self.collision_mesh_files = [f for f in link_mesh_files if f is not None]
+                # use collision mesh files to be decomposed
+                self.collision_mesh_files = [f for f in collision_mesh_files if f is not None]
+                self.collision_link_names = [
+                    collision_link_names[i]
+                    for i, f in enumerate(collision_mesh_files)
+                    if f is not None
+                ]
 
                 
                 # Populate the chain tree
@@ -2241,13 +2246,21 @@ class URDFViewer(QMainWindow):
             )
             return
 
-        # Create and show the decomposition dialog
-        dialog = DecompDialog(self, self.collision_mesh_files)
-        
-        decomposed_mesh_files = dialog.exec_()
+        link_names = getattr(self, 'collision_link_names', [])
 
-        if decomposed_mesh_files is not None:
-            self.edit_urdf_file(replace_collision=True)
+        dialog = DecompDialog(
+            self,
+            self.collision_mesh_files,
+            link_names,
+            self.current_urdf_file,
+        )
+        dialog.decomposition_applied.connect(self._on_decomposition_applied)
+        dialog.exec_()
+
+    def _on_decomposition_applied(self, modified_urdf_path):
+        """Reload the model from the decomposition-modified URDF."""
+        self.load_urdf_file(modified_urdf_path)
+        self.statusBar().showMessage(tr("decomp_applied_success"), 5000)
 
     def change_language(self, index):
         """Handle language change from the language combo box"""

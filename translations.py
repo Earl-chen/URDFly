@@ -96,6 +96,30 @@ TRANSLATIONS = {
         "zh_CN": "vhacdx 模块未安装，所有网格将退化为单凸包近似（精度较低）。\n是否仍要继续？",
         "en": "vhacdx module is not installed. All meshes will fall back to single convex hull approximation (lower accuracy).\nContinue anyway?"
     },
+    "decomp_global_settings": {"zh_CN": "全局设置", "en": "Global Settings"},
+    "decomp_default_hulls": {"zh_CN": "默认最大凸包数：", "en": "Default maxConvexHulls:"},
+    "decomp_select_all": {"zh_CN": "全选", "en": "Select All"},
+    "decomp_deselect_all": {"zh_CN": "取消全选", "en": "Deselect All"},
+    "decomp_link_name": {"zh_CN": "连杆名称", "en": "Link Name"},
+    "decomp_original_faces": {"zh_CN": "原始面数", "en": "Original Faces"},
+    "decomp_result_hulls": {"zh_CN": "凸包数", "en": "Hull Count"},
+    "decomp_result_faces": {"zh_CN": "结果面数", "en": "Result Faces"},
+    "decomp_status": {"zh_CN": "状态", "en": "Status"},
+    "decomp_start": {"zh_CN": "开始分解", "en": "Start Decomposition"},
+    "decomp_apply": {"zh_CN": "应用到 URDF", "en": "Apply to URDF"},
+    "decomp_processing": {"zh_CN": "正在处理 {}/{}：{}...", "en": "Processing {}/{}: {}..."},
+    "decomp_status_success": {"zh_CN": "V-HACD 成功", "en": "V-HACD OK"},
+    "decomp_status_fallback": {"zh_CN": "退化为凸包", "en": "Fallback"},
+    "decomp_status_error": {"zh_CN": "错误", "en": "Error"},
+    "decomp_status_skipped": {"zh_CN": "已跳过", "en": "Skipped"},
+    "decomp_status_pending": {"zh_CN": "待处理", "en": "Pending"},
+    "decomp_reduction_tooltip": {"zh_CN": "{} 面 (减少 {}%)", "en": "{} faces ({}% reduction)"},
+    "decomp_cancelled": {"zh_CN": "分解已取消", "en": "Cancelled"},
+    "decomp_fallback_warning": {
+        "zh_CN": "⚠ {} 个网格退化为单凸包（V-HACD 失败或不可用）",
+        "en": "⚠ {} mesh(es) fell back to single convex hull (V-HACD failed or unavailable)"
+    },
+    "decomp_applied_success": {"zh_CN": "凸分解结果已应用到 URDF", "en": "Decomposition applied to URDF"},
 
     # === XML 编辑器 ===
     "urdf_editor": {"zh_CN": "URDF 编辑器", "en": "URDF Editor"},
